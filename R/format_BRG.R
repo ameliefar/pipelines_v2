@@ -4,15 +4,15 @@
 #'
 #'This section provides details on data management choices that are unique to
 #'this data. For a general description of the standard format please see
-#'\href{https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v1.1.0.pdf}{here}.
+#'\href{https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v2.0.0.pdf}{here}.
 #'
-#'\strong{Species}: Primarily Great tits and Blue tits.
+#'\strong{speciesID}: Primarily Great tits and Blue tits.
 #'
-#'\strong{IndvID}: Should be a character s  tring of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
+#'\strong{individualID}: Should be a character string of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
 #'
 #'@inheritParams pipeline_params
 #'
-#'@return Generates either 4 .csv files or 4 data frames in the standard format.
+#'@return Generates either 6 .csv files or 6 data frames in the standard format.
 #'@export
 
 format_BRG <- function(db = choose_directory(),
@@ -65,24 +65,29 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     LayDate_observed = suppressWarnings(as.Date(as.numeric(.data$LayDate),
-                                                                 origin = as.Date(paste0(.data$BreedingSeason, "-03-31")))),
-                     HatchDate_observed = suppressWarnings(as.Date(as.numeric(.data$HatchDate),
-                                                                   origin = as.Date(paste0(.data$BreedingSeason, "-03-31")))),
-                     ClutchSize_observed = suppressWarnings(as.integer(.data$ClutchSize)),
-                     BroodSize_observed = suppressWarnings(as.integer(.data$BroodSize)),
-                     NumberFledged_observed = suppressWarnings(as.integer(.data$Fledged)),
-                     HabitatType = tolower(.data$Vegetation)) %>%
+    dplyr::transmute(studyID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG-1", #asked data custodian whether this was a new population or a new site
+                                                TRUE ~ "BRG-1"),
+                     siteID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG",
+                                               TRUE ~ "BRG"),
+                     Year = as.integer(.data$Year),
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                  .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                  .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                  .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                  TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
+                     plotID = .data$Location,
+                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     observedLayDate = suppressWarnings(as.Date(as.numeric(.data$LayDate),
+                                                                origin = as.Date(paste0(.data$Year, "-03-31")))),
+                     observedHatchDate = suppressWarnings(as.Date(as.numeric(.data$HatchDate),
+                                                                  origin = as.Date(paste0(.data$Year, "-03-31")))),
+                     observedClutchSize = suppressWarnings(as.integer(.data$ClutchSize)),
+                     observedBroodSize = suppressWarnings(as.integer(.data$BroodSize)),
+                     observedNumberFledged = suppressWarnings(as.integer(.data$Fledged)),
+                     HabitatType = tolower(.data$Vegetation),
+                     treatmentID = tolower(.data$Experiment)) %>% #anticipate new column "Experiment" as discussed with data custodian
 
-    dplyr::arrange(.data$PopID, .data$BreedingSeason, .data$Plot, .data$LocationID)
+    dplyr::arrange(.data$siteID, .data$Year, .data$plotID, .data$locationID)
 
 
   ## Read in chick data
@@ -96,20 +101,30 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     CaptureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))),
-                     IndvID = .data$Ring,
-                     RingAge = .data$Age,
-                     ChickAge = as.integer(.data$ChickAge),
-                     CaptureTime = gsub("--", ":00", .data$Time),
-                     Mass = round(suppressWarnings(as.numeric(.data$Weight)), 1))
+    dplyr::transmute(studyID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG-1", #asked data custodian whether this was a new population or a new site
+                                                TRUE ~ "BRG-1"),
+                     siteID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG",
+                                               TRUE ~ "BRG"),
+                     Year = as.integer(.data$Year), #keep this to facilitate merging
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                  .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                  .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                  .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                  TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
+                     plotID = .data$Location,
+                     locationID = paste(.data$Location, .data$Nestbox, sep = "_"),
+                     captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
+                     captureYear = .data$Year,
+                     captureMonth = as.integer(.data$Month),
+                     captureDay = as.integer(.data$Day),
+                     individualID = .data$Ring,
+                     Age = tolower(.data$Age),
+                     chickAge = as.integer(.data$ChickAge),
+                     captureTime = gsub("--", ":00", .data$Time),
+                     recordedBy = .data$ObservedId,
+                     mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
+                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2),
+                     capturePhysical = TRUE) # chicks are always handled thus captured
 
 
   ## Read in adult data
@@ -123,22 +138,36 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     CaptureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))),
-                     IndvID = .data$Ring,
-                     Sex_observed = .data$Sex,
-                     Age_observed = dplyr::case_when(.data$ObsAge == "juv" ~ 5L,
-                                                     .data$ObsAge == "ad" ~ 6L),
-                     CaptureTime = paste0(substr(.data$Time,1,2), ":", substr(.data$Time,3,4)),
-                     Mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
-                     WingLength = as.numeric(.data$WingLength))
+    dplyr::transmute(studyID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG-1", #asked data custodian whether this was a new population or a new site
+                                                TRUE ~ "BRG-1"),
+                     siteID = dplyr::case_when(.data$Site == "Langeskogen" ~ "LKG",
+                                               TRUE ~ "BRG"),
+                     Year = as.integer(.data$Year), #keep this to facilitate merging
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                  .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                  .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                  .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                  TRUE ~ NA_character_), #anticipate instances of processing adults from other species
+                     plotID = .data$Location,
+                     locationID = paste(.data$locationID, .data$Nestbox, "NB", sep = "_"),
+                     captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
+                     captureYear = .data$Year,
+                     captureMonth = as.integer(.data$Month),
+                     captureDay = as.integer(.data$Day),
+                     individualID = .data$Ring,
+                     TagID = dplyr::case_when(.data$Control == "new" ~ NA_character_,
+                                              TRUE ~ .data$Ring),
+                     observedSex = .data$Sex,
+                     recordedBy = .data$observerId,
+                     Age = dplyr::case_when(.data$ObsAge == "juv" ~ "subadult",
+                                            .data$ObsAge == "ad" ~ "adult"),
+                     captureTime = dplyr::case_when(stringr::str_detect(.data$Time, "--") ~ gsub("--", ":00", .data$Time), #account for cases when minutes are lacking
+                                                    TRUE ~ paste0(substr(.data$Time,1,2), ":", substr(.data$Time,3,4))),
+                     capturePhysical = dplyr::if_else(stringr::str_detect(.data$Comment, "ID from color"), FALSE, TRUE),
+                     mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
+                     wingLength = as.numeric(.data$WingLength),
+                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2),
+                     beak = round(suppressWarnings(as.numeric(.data$Beak)), 2)) #anticipate future column "beak" as discussed with data custodian
 
   #### BROOD DATA
   message("Compiling brood information...")
