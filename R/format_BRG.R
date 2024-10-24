@@ -181,9 +181,18 @@ format_BRG <- function(db = choose_directory(),
   message("Compiling individual information...")
   Individual_data_temp <- create_individual_BRG(Capture_data_temp)
 
+  #### MEASUREMENT DATA
+  message("Compiling measurement information...")
+  Measurement_data_temp <- create_measurement_BRG(Capture_data_temp) #new in v2.0
+
   #### LOCATION DATA
   message("Compiling location information...")
   Location_data_temp <- create_location_BRG(nest_data)
+
+  #### EXPERIMENT DATA
+  message("Compiling experiment information...")
+  Experiment_data_temp <- create_experiment_BRG(Brood_data_temp) #new in v2.0
+
 
   time <- difftime(Sys.time(), start_time, units = "sec")
 
@@ -195,85 +204,144 @@ format_BRG <- function(db = choose_directory(),
   Brood_data <- Brood_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(brood_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Brood_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(brood_data_template[0, !(names(brood_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Brood_data[0, !(names(data_templates$v2.0$Brood_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
-
-    ## Reorder columns
-    dplyr::select(names(brood_data_template)) %>%
-    dplyr::ungroup() %>%
 
     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(.data$BroodID,
                           .data$PopID,
                           .data$BreedingSeason,
-                          .data$Species), dplyr::all_vars(!is.na(.)))
+                          .data$Species), dplyr::all_vars(!is.na(.))) %>%
+    ## Add rowID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Brood_data)) %>%
+    dplyr::ungroup()
+
 
 
   ## Capture data
   Capture_data <- Capture_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(capture_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Capture_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(capture_data_template[0, !(names(capture_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Capture_data[0, !(names(data_templates$v2.0$Capture_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
 
-    ## Reorder columns
-    dplyr::select(names(capture_data_template)) %>%
-    dplyr::ungroup() %>%
-
-    ## Remove any NAs from critical columns
+     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(.data$CaptureID,
                           .data$CapturePopID,
                           .data$BreedingSeason,
                           .data$IndvID,
                           .data$Species,
-                          .data$CaptureDate), dplyr::all_vars(!is.na(.)))
+                          .data$CaptureDate), dplyr::all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Capture_data)) %>%
+    dplyr::ungroup()
+
+
 
 
   ## Individual data
   Individual_data <- Individual_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(individual_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Individual_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(individual_data_template[0, !(names(individual_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Individual_data[0, !(names(data_templates$v2.0$Individual_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
-
-    ## Reorder columns
-    dplyr::select(names(individual_data_template))  %>%
-    dplyr::ungroup() %>%
 
     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(.data$PopID,
                           .data$IndvID,
                           .data$Species,
-                          .data$RingSeason), dplyr::all_vars(!is.na(.)))
+                          .data$RingSeason), dplyr::all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Individual_data))  %>%
+    dplyr::ungroup()
+
+
+
+
+  ## Measurement data
+  Measurement_data <- Measurement_data_temp %>%
+
+    ## Keep only necessary columns
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Measurement_data))) %>%
+
+    ## Add missing columns
+    dplyr::bind_cols(data_templates$v2.0$Measurement_data[0, !(names(data_templates$v2.0$Measurement_data) %in% names(.))] %>%
+                       tibble::add_row()) %>%
+
+    ## Remove any NAs from critical columns
+    dplyr::filter_at(vars(.data$siteID),
+                     all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Measurement_data)) %>%
+    dplyr::ungroup()
+
+
 
 
   ## Location data
   Location_data <- Location_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(location_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Location_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(location_data_template[0, !(names(location_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Location_data[0, !(names(data_templates$v2.0$Location_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
-
-    ## Reorder columns
-    dplyr::select(names(location_data_template))  %>%
-    dplyr::ungroup() %>%
 
     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(.data$LocationID,
                           .data$PopID),
-                     all_vars(!is.na(.)))
+                     all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Location_data))  %>%
+    dplyr::ungroup()
+
+
+  ## Experiment data
+  Experiment_data <- Experiment_data_temp %>%
+
+    ## Keep only necessary columns
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Experiment_data))) %>%
+
+    ## Add missing columns
+    dplyr::bind_cols(data_templates$v2.0$Experiment_data[0, !(names(data_templates$v2.0$Experiment_data) %in% names(.))] %>%
+                       tibble::add_row()) %>%
+
+    ## Remove any NAs from critical columns
+    dplyr::filter_at(vars(.data$siteID),
+                     all_vars(!is.na(.))) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Experiment_data))  %>%
+    dplyr::ungroup()
 
 
 
@@ -281,30 +349,36 @@ format_BRG <- function(db = choose_directory(),
   if(!is.null(species_filter)){
 
     Brood_data <- Brood_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
     Capture_data <- Capture_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
     Individual_data <- Individual_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
   }
 
-  ## Filter to keep only desired Pops if specified for Brood, Capture, Individual, and Location tables
+  ## Filter to keep only desired Pops if specified for Brood, Capture, Individual, Measurement and Location tables
   if(!is.null(pop_filter)){
 
     Brood_data <- Brood_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$siteID %in% species_filter & !(is.na(.data$siteID)))
 
     Capture_data <- Capture_data %>%
-      dplyr::filter(.data$CapturePopID %in% pop_filter & !(is.na(.data$CapturePopID)))
+      dplyr::filter(.data$captureSiteID %in% pop_filter & !(is.na(.data$captureSiteID)))
 
     Individual_data <- Individual_data %>%
-      dplyr::filter(.data$PopID %in% pop_filter & !(is.na(.data$PopID)))
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
+
+    Measurement_data <- Measurement_data %>%
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
     Location_data <- Location_data %>%
-      dplyr::filter(.data$PopID %in% pop_filter & !(is.na(.data$PopID)))
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
+
+    Experiment_data <- Experiment_data %>%
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
   }
 
@@ -320,7 +394,11 @@ format_BRG <- function(db = choose_directory(),
 
     utils::write.csv(x = Individual_data, file = paste0(path, "\\Individual_data_BRG.csv"), row.names = F)
 
+    utils::write.csv(x = Measurement_data, file = paste0(path, "\\Measurement_data_BRG.csv"), row.names = F)
+
     utils::write.csv(x = Location_data, file = paste0(path, "\\Location_data_BRG.csv"), row.names = F)
+
+    utils::write.csv(x = Experiment_data, file = paste0(path, "\\Experiment_data_BRG.csv"), row.names = F)
 
     invisible(NULL)
 
@@ -333,7 +411,9 @@ format_BRG <- function(db = choose_directory(),
     return(list(Brood_data = Brood_data,
                 Capture_data = Capture_data,
                 Individual_data = Individual_data,
-                Location_data = Location_data))
+                Measurement_data = Measurement_data,
+                Location_data = Location_data,
+                Experiment_data = Experiment_data))
 
   }
 
