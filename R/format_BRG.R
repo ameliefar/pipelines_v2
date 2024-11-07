@@ -4,15 +4,18 @@
 #'
 #'This section provides details on data management choices that are unique to
 #'this data. For a general description of the standard format please see
-#'\href{https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v1.1.0.pdf}{here}.
+#'\href{https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v2.0.0.pdf}{here}.
 #'
-#'\strong{Species}: Primarily Great tits and Blue tits.
+#'\strong{speciesID}: Primarily Great tits and Blue tits.
 #'
-#'\strong{IndvID}: Should be a character s  tring of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
+#'\strong{individualID}: Should be a character s  tring of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
+#'
+#'\strong{studyID}: one population "BRG-1" at the moment - I'm waiting for data custodian's answer to know
+#'whether Langeskogen should be considered a separate popualation
 #'
 #'@inheritParams pipeline_params
 #'
-#'@return Generates either 4 .csv files or 4 data frames in the standard format.
+#'@return Generates either 6 .csv files or 6 data frames in the standard format.
 #'@export
 
 format_BRG <- function(db = choose_directory(),
@@ -65,24 +68,27 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     LayDate_observed = suppressWarnings(as.Date(as.numeric(.data$LayDate),
-                                                                 origin = as.Date(paste0(.data$BreedingSeason, "-03-31")))),
-                     HatchDate_observed = suppressWarnings(as.Date(as.numeric(.data$HatchDate),
-                                                                   origin = as.Date(paste0(.data$BreedingSeason, "-03-31")))),
-                     ClutchSize_observed = suppressWarnings(as.integer(.data$ClutchSize)),
-                     BroodSize_observed = suppressWarnings(as.integer(.data$BroodSize)),
-                     NumberFledged_observed = suppressWarnings(as.integer(.data$Fledged)),
-                     HabitatType = tolower(.data$Vegetation)) %>%
+    dplyr::transmute(studyID = "BRG-1",
+                     siteID = "BRG",
+                     Year = as.integer(.data$Year),
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
+                     plotID = .data$Location,
+                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     observedLayDate = suppressWarnings(as.Date(as.numeric(.data$LayDate),
+                                                                origin = as.Date(paste0(.data$Year, "-03-31")))),
+                     observedHatchDate = suppressWarnings(as.Date(as.numeric(.data$HatchDate),
+                                                                  origin = as.Date(paste0(.data$Year, "-03-31")))),
+                     observedClutchSize = suppressWarnings(as.integer(.data$ClutchSize)),
+                     observedBroodSize = suppressWarnings(as.integer(.data$BroodSize)),
+                     observedNumberFledged = suppressWarnings(as.integer(.data$Fledged)),
+                     HabitatType = tolower(.data$Vegetation),
+                     treatmentID = tolower(.data$Experiment)) %>% #anticipate new column "Experiment" as discussed with data custodian
 
-    dplyr::arrange(.data$PopID, .data$BreedingSeason, .data$Plot, .data$LocationID)
+    dplyr::arrange(.data$siteID, .data$Year, .data$plotID, .data$locationID)
 
 
   ## Read in chick data
@@ -96,20 +102,29 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     CaptureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))),
-                     IndvID = .data$Ring,
-                     RingAge = .data$Age,
-                     ChickAge = as.integer(.data$ChickAge),
-                     CaptureTime = gsub("--", ":00", .data$Time),
-                     Mass = round(suppressWarnings(as.numeric(.data$Weight)), 1))
+    dplyr::transmute(studyID = "BRG-1",
+                     siteID = "BRG",
+                     Year = as.integer(.data$Year),
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
+                     plotID = .data$Location,
+                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
+                     captureYear = .data$Year,
+                     captureMonth = as.integer(.data$Month),
+                     captureDay = as.integer(.data$Day),
+                     individualID = .data$Ring,
+                     captureTagID = .data$Ring,
+                     Age = tolower(.data$Age),
+                     chickAge = as.integer(.data$ChickAge),
+                     captureTime = gsub("--", ":00", .data$Time),
+                     recordedBy = .data$ObserverId,
+                     mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
+                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2),
+                     capturePhysical = TRUE) # chicks are always handled thus physically captured
 
 
   ## Read in adult data
@@ -123,22 +138,34 @@ format_BRG <- function(db = choose_directory(),
     ## Rename and process columns
     dplyr::mutate(dplyr::across(where(is.character),
                                 ~dplyr::na_if(., "."))) %>%
-    dplyr::transmute(PopID = "BRG",
-                     BreedingSeason = as.integer(.data$Year),
-                     Species = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes[species_codes$SpeciesID == 14640,]$Species,
-                                                .data$Species == "Bl\u00e5meis"  ~ species_codes[species_codes$SpeciesID == 14620,]$Species,
-                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes[species_codes$SpeciesID == 13490,]$Species,
-                                                .data$Species == "Svartmeis"  ~ species_codes[species_codes$SpeciesID == 14610,]$Species),
-                     Plot = .data$Location,
-                     LocationID = as.character(.data$Nestbox),
-                     CaptureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))),
-                     IndvID = .data$Ring,
-                     Sex_observed = .data$Sex,
-                     Age_observed = dplyr::case_when(.data$ObsAge == "juv" ~ 5L,
-                                                     .data$ObsAge == "ad" ~ 6L),
-                     CaptureTime = paste0(substr(.data$Time,1,2), ":", substr(.data$Time,3,4)),
-                     Mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
-                     WingLength = as.numeric(.data$WingLength))
+    dplyr::transmute(studyID = "BRG-1",
+                     siteID = "BRG",
+                     Year = as.integer(.data$Year),
+                     speciesID = dplyr::case_when(.data$Species == "Kj\u00f8ttmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10001)],
+                                                .data$Species == "Bl\u00e5meis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10002)],
+                                                .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
+                                                .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
+                                                TRUE ~ NA_character_), #anticipate instances of processing adults from other species
+                     plotID = .data$Location,
+                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
+                     captureYear = .data$Year,
+                     captureMonth = as.integer(.data$Month),
+                     captureDay = as.integer(.data$Day),
+                     individualID = .data$Ring,
+                     captureTagID = dplyr::case_when(.data$Control == "new" ~ NA_character_,
+                                              TRUE ~ .data$Ring),
+                     observedSex = .data$Sex,
+                     recordedBy = .data$ObserverId,
+                     Age = dplyr::case_when(.data$ObsAge == "juv" ~ "subadult",
+                                            .data$ObsAge == "ad" ~ "adult"),
+                     captureTime = dplyr::case_when(stringr::str_detect(.data$Time, "--") ~ gsub("--", ":00", .data$Time), #account for cases when only hour was provided
+                                                    TRUE ~ paste0(substr(.data$Time,1,2), ":", substr(.data$Time,3,4))),
+                     capturePhysical = dplyr::if_else(stringr::str_detect(.data$Comment, "ID from color"), FALSE, TRUE),
+                     mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
+                     wingLength = as.numeric(.data$WingLength),
+                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2),
+                     beak = round(suppressWarnings(as.numeric(.data$Beak)), 2)) #anticipate future column "beak" as discussed with data custodian
 
   #### BROOD DATA
   message("Compiling brood information...")
@@ -152,9 +179,18 @@ format_BRG <- function(db = choose_directory(),
   message("Compiling individual information...")
   Individual_data_temp <- create_individual_BRG(Capture_data_temp)
 
+  #### MEASUREMENT DATA
+  message("Compiling measurement information...")
+  Measurement_data_temp <- create_measurement_BRG(Capture_data_temp) #new in v2.0
+
   #### LOCATION DATA
   message("Compiling location information...")
   Location_data_temp <- create_location_BRG(nest_data)
+
+  #### EXPERIMENT DATA
+  message("Compiling experiment information...")
+  Experiment_data_temp <- create_experiment_BRG(Brood_data_temp) #new in v2.0
+
 
   time <- difftime(Sys.time(), start_time, units = "sec")
 
@@ -166,116 +202,176 @@ format_BRG <- function(db = choose_directory(),
   Brood_data <- Brood_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(brood_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Brood_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(brood_data_template[0, !(names(brood_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Brood_data[0, !(names(data_templates$v2.0$Brood_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
 
-    ## Reorder columns
-    dplyr::select(names(brood_data_template)) %>%
-    dplyr::ungroup() %>%
-
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$BroodID,
-                          .data$PopID,
-                          .data$BreedingSeason,
-                          .data$Species), dplyr::all_vars(!is.na(.)))
+    dplyr::filter_at(vars(broodID,
+                          siteID,
+                          observedLayYear,
+                          speciesID), dplyr::all_vars(!is.na(.))) %>%
+
+    ## Add rowID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Brood_data)) %>%
+    dplyr::ungroup() %>%
 
 
   ## Capture data
   Capture_data <- Capture_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(capture_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Capture_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(capture_data_template[0, !(names(capture_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Capture_data[0, !(names(data_templates$v2.0$Capture_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
 
-    ## Reorder columns
-    dplyr::select(names(capture_data_template)) %>%
-    dplyr::ungroup() %>%
-
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$CaptureID,
-                          .data$CapturePopID,
-                          .data$BreedingSeason,
-                          .data$IndvID,
-                          .data$Species,
-                          .data$CaptureDate), dplyr::all_vars(!is.na(.)))
+    dplyr::filter_at(vars(captureID,
+                          captureSiteID,
+                          individualID,
+                          speciesID,
+                          captureYear,
+                          captureMonth,
+                          captureDay), dplyr::all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Capture_data)) %>%
+    dplyr::ungroup()
 
 
   ## Individual data
   Individual_data <- Individual_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(individual_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Individual_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(individual_data_template[0, !(names(individual_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Individual_data[0, !(names(data_templates$v2.0$Individual_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
 
+    ## Remove any NAs from critical columns
+    dplyr::filter_at(vars(siteID,
+                          individualID,
+                          speciesID,
+                          tagYear), dplyr::all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
     ## Reorder columns
-    dplyr::select(names(individual_data_template))  %>%
-    dplyr::ungroup() %>%
+    dplyr::select(names(data_templates$v2.0$Individual_data))  %>%
+    dplyr::ungroup()
+
+
+
+  ## Measurement data
+  Measurement_data <- Measurement_data_temp %>%
+
+    ## Keep only necessary columns
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Measurement_data))) %>%
+
+    ## Add missing columns
+    dplyr::bind_cols(data_templates$v2.0$Measurement_data[0, !(names(data_templates$v2.0$Measurement_data) %in% names(.))] %>%
+                       tibble::add_row()) %>%
 
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$PopID,
-                          .data$IndvID,
-                          .data$Species,
-                          .data$RingSeason), dplyr::all_vars(!is.na(.)))
+    dplyr::filter_at(vars(.data$siteID),
+                     all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Measurement_data)) %>%
+    dplyr::ungroup()
+
 
 
   ## Location data
   Location_data <- Location_data_temp %>%
 
     ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(location_data_template))) %>%
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Location_data))) %>%
 
     ## Add missing columns
-    dplyr::bind_cols(location_data_template[0, !(names(location_data_template) %in% names(.))] %>%
+    dplyr::bind_cols(data_templates$v2.0$Location_data[0, !(names(data_templates$v2.0$Location_data) %in% names(.))] %>%
                        tibble::add_row()) %>%
 
+    ## Remove any NAs from critical columns
+    dplyr::filter_at(vars(.data$locationID,
+                          .data$siteID),
+                     all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
+
     ## Reorder columns
-    dplyr::select(names(location_data_template))  %>%
-    dplyr::ungroup() %>%
+    dplyr::select(names(data_templates$v2.0$Location_data))  %>%
+    dplyr::ungroup()
+
+  ## Experiment data
+  Experiment_data <- Experiment_data_temp %>%
+
+    ## Keep only necessary columns
+    dplyr::select(dplyr::contains(names(data_templates$v2.0$Experiment_data))) %>%
+
+    ## Add missing columns
+    dplyr::bind_cols(data_templates$v2.0$Experiment_data[0, !(names(data_templates$v2.0$Experiment_data) %in% names(.))] %>%
+                       tibble::add_row()) %>%
 
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$LocationID,
-                          .data$PopID),
-                     all_vars(!is.na(.)))
+    dplyr::filter_at(vars(.data$siteID),
+                     all_vars(!is.na(.))) %>%
 
+    ## Reorder columns
+    dplyr::select(names(data_templates$v2.0$Experiment_data))  %>%
+    dplyr::ungroup()
 
 
   ## Filter to keep only desired Species if specified for Brood, Capture, and Individual tables
   if(!is.null(species_filter)){
 
     Brood_data <- Brood_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
     Capture_data <- Capture_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
     Individual_data <- Individual_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$speciesID %in% species_filter & !(is.na(.data$speciesID)))
 
   }
 
-  ## Filter to keep only desired Pops if specified for Brood, Capture, Individual, and Location tables
+  ## Filter to keep only desired Pops if specified for Brood, Capture, Individual, Measurement, Location and Experiment tables
   if(!is.null(pop_filter)){
 
     Brood_data <- Brood_data %>%
-      dplyr::filter(.data$Species %in% species_filter & !(is.na(.data$Species)))
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
     Capture_data <- Capture_data %>%
-      dplyr::filter(.data$CapturePopID %in% pop_filter & !(is.na(.data$CapturePopID)))
+      dplyr::filter(.data$captureSiteID %in% pop_filter & !(is.na(.data$captureSiteID)))
+
+    Measurement_data <- Measurement_data %>%
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
     Individual_data <- Individual_data %>%
-      dplyr::filter(.data$PopID %in% pop_filter & !(is.na(.data$PopID)))
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
     Location_data <- Location_data %>%
-      dplyr::filter(.data$PopID %in% pop_filter & !(is.na(.data$PopID)))
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
+
+    Experiment_data <- Experiment_data %>%
+      dplyr::filter(.data$siteID %in% pop_filter & !(is.na(.data$siteID)))
 
   }
 
@@ -291,7 +387,11 @@ format_BRG <- function(db = choose_directory(),
 
     utils::write.csv(x = Individual_data, file = paste0(path, "\\Individual_data_BRG.csv"), row.names = F)
 
+    utils::write.csv(x = Measurement_data, file = paste0(path, "\\Measurement_data_BRG.csv"), row.names = F)
+
     utils::write.csv(x = Location_data, file = paste0(path, "\\Location_data_BRG.csv"), row.names = F)
+
+    utils::write.csv(x = Experiment_data, file = paste0(path, "\\Experiment_data_BRG.csv"), row.names = F)
 
     invisible(NULL)
 
@@ -304,7 +404,9 @@ format_BRG <- function(db = choose_directory(),
     return(list(Brood_data = Brood_data,
                 Capture_data = Capture_data,
                 Individual_data = Individual_data,
-                Location_data = Location_data))
+                Measurement_data = Measurement_data,
+                Location_data = Location_data,
+                Experiment_data = Experiment_data))
 
   }
 
@@ -331,44 +433,62 @@ create_brood_BRG <- function(nest_data, chick_data, adult_data) {
 
     ## Join summarized chick data
     dplyr::left_join(chick_data %>%
-                       dplyr::filter(dplyr::between(.data$ChickAge, 14, 16)) %>%
-                       dplyr::group_by(.data$BreedingSeason, .data$Plot, .data$LocationID) %>%
-                       dplyr::summarise(AvgChickMass = mean(.data$Mass, na.rm = T),
-                                        NumberChicksMass = sum(!is.na(.data$Mass))),
-                     by = c("BreedingSeason", "Plot", "LocationID")) %>%
+                       dplyr::select(Year,
+                                     plotID,
+                                     locationID,
+                                     individualID),
+                     by = c("Year", "plotID", "locationID")) %>%
 
     ## Join adult data to get info on parents
     dplyr::left_join(adult_data %>%
-                       dplyr::select(.data$BreedingSeason,
-                                     .data$Plot,
-                                     .data$LocationID,
-                                     .data$IndvID,
-                                     .data$Sex_observed) %>%
-                       tidyr::pivot_wider(id_cols = c(.data$BreedingSeason,
-                                                      .data$Plot,
-                                                      .data$LocationID),
-                                          values_from = .data$IndvID,
-                                          names_from = .data$Sex_observed) %>%
-                       dplyr::rename(FemaleID = "F",
-                                     MaleID = "M"),
-                     by = c("BreedingSeason", "Plot", "LocationID")) %>%
+                       dplyr::select(Year,
+                                     plotID,
+                                     locationID,
+                                     individualID,
+                                     observedSex) %>%
+                       tidyr::pivot_wider(id_cols = c(Year,
+                                                      plotID,
+                                                      locationID),
+                                          values_from = individualID,
+                                          names_from = observedSex) %>%
+                       dplyr::rename(femaleID = "F",
+                                     maleID = "M"),
+                     by = c("Year", "plotID", "locationID")) %>%
 
-    dplyr::arrange(.data$PopID, .data$BreedingSeason, .data$Plot, .data$LocationID) %>%
+    dplyr::arrange(.data$siteID, .data$Year, .data$plotID, .data$locationID) %>%
 
-    ## Create BroodID
-    dplyr::mutate(BroodID = paste(.data$BreedingSeason, 1:dplyr::n(), sep = "-")) %>%
+    ## Create additional variables
+    dplyr::mutate(broodID = paste(.data$Year, 1:dplyr::n(), sep = "-"),
+                  observedLayYear = as.integer(lubridate::year(.data$observedLayDate)),
+                  observedLayMonth = as.integer(lubridate::month(.data$observedLayDate)),
+                  observedLayDay = as.integer(lubridate::day(.data$observedLayDate)),
+                  observedHatchYear = as.integer(.data$Year),
+                  observedHatchMonth = as.integer(lubridate::month(.data$observedHatchDate)),
+                  observedHatchDay = as.integer(lubridate::day(.data$observedHatchDate)),
+                  observedFledgeYear = as.integer(.data$Year),
+                  observedClutchType = "first") %>%  #check with data custodian if cases of second/replacement clutch
 
-    ## Calculate clutch type
-    dplyr::mutate(ClutchType_calculated = calc_clutchtype(data =. , protocol_version = "1.1", na.rm = FALSE)) %>%
+    ## Calculate optional variables
+    {if("breedingSeason" %in% optional_variables) calc_season(data = .,
+                                                              season = .data$Year)
+      else .} %>%
+
+    {if("calculatedClutchType" %in% optional_variables)  calc_clutchtype(data = ., na.rm = FALSE,
+                                                                         protocol_version = "2.0")
+      else .} %>%
+
+    {if("nestAttemptNumber" %in% optional_variables) calc_nestattempt(data = .,
+                                                                      season = .data$breedingSeason)
+      else .}  %>%
 
     ## Set improperly formatted IDs to NA
-    dplyr::mutate(dplyr::across(c(.data$FemaleID,
-                                  .data$MaleID),
-                                ~dplyr::case_when(stringr::str_detect(., "^[:alpha:]{2}[:digit:]{5}$") ~ .,
+    dplyr::mutate(dplyr::across(c(femaleID,
+                                  maleID),
+                                ~dplyr::case_when(stringr::str_detect(., "^[A-Z0-9]{2}[0-9]{5}$") ~ .,
                                                   TRUE ~ NA_character_))) %>%
 
     ## Reorder columns
-    dplyr::select(dplyr::any_of(names(brood_data_template)), tidyselect::everything())
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Brood_data)), tidyselect::everything())
 
   return(Brood_data_temp)
 
@@ -392,48 +512,51 @@ create_capture_BRG <- function(chick_data, adult_data, Brood_data_temp) {
 
     ## Bind chick data
     dplyr::bind_rows(chick_data %>%
-                       dplyr::mutate(Age_observed = 1L) %>%
                        dplyr::left_join(Brood_data_temp %>%
-                                          dplyr::select(.data$BreedingSeason,
-                                                        .data$Plot,
-                                                        .data$LocationID,
-                                                        .data$BroodID),
-                                        by = c("BreedingSeason", "Plot", "LocationID"))) %>%
+                                          dplyr::select(Year,
+                                                        plotID,
+                                                        locationID,
+                                                        broodID),
+                                        by = c("Year", "plotID", "locationID"))) %>%
 
     ## Create new columns
-    dplyr::mutate(CapturePopID = .data$PopID,
-                  ReleasePopID = .data$PopID,
-                  CapturePlot  = .data$Plot,
-                  ReleasePlot  = .data$Plot) %>%
-
-    ## Arrange
-    dplyr::arrange(.data$IndvID, .data$CaptureDate) %>%
-
-    ## Calculate age
-    dplyr::group_by(.data$IndvID) %>%
-    calc_age(ID = .data$IndvID,
-             Age = .data$Age_observed,
-             Date = .data$CaptureDate,
-             Year = .data$BreedingSeason) %>%
+    dplyr::mutate(releaseTagID = .data$individualID,
+                  captureSiteID = .data$siteID,
+                  releaseSiteID = .data$siteID, #no instance of transfert/cross-fostering
+                  capturePlotID  = .data$plotID,
+                  releasePlotID  = .data$plotID,
+                  captureAlive = TRUE,
+                  releaseAlive = TRUE) %>%
 
     ## Set improperly formatted IDs to NA and filter
-    dplyr::mutate(IndvID = dplyr::case_when(stringr::str_detect(.data$IndvID,  "^[:alpha:]{2}[:digit:]{5}$") ~ .data$IndvID,
+    dplyr::mutate(individualID = dplyr::case_when(stringr::str_detect(.data$individualID,  "^[A-Z0-9]{2}[0-9]{5}$") ~ .data$individualID,
                                             TRUE ~ NA_character_)) %>%
-    dplyr::filter(!is.na(.data$IndvID)) %>%
+    dplyr::filter(!is.na(.data$individualID)) %>%
 
-    ## Create CaptureID
+    ## Create captureID
     ## Arrange
-    dplyr::arrange(.data$BreedingSeason, .data$IndvID, .data$CaptureDate) %>%
-    dplyr::mutate(CaptureID = paste(.data$IndvID, dplyr::row_number(), sep = "_")) %>%
+    dplyr::arrange(.data$Year, .data$individualID, .data$captureDate) %>%
+    dplyr::group_by(.data$individualID) %>%
+    dplyr::mutate(captureID = paste(.data$individualID, 1:dplyr::n(), sep = "_")) %>%
+    dplyr::ungroup() %>%
+
+    ## Calculate age
+    {if("exactAge" %in% optional_variables | "minimumAge" %in% optional_variables) calc_age(data = .,
+                                                                                            ID = .data$individualID,
+                                                                                            Age = .data$Age,
+                                                                                            Date = .data$captureDate,
+                                                                                            Year = .data$Year,
+                                                                                            protocol_version = "2.0")
+      else .}  %>%
 
     ## Reorder columns
-    dplyr::select(dplyr::any_of(names(capture_data_template)), tidyselect::everything())
-
-
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Capture_data)), tidyselect::everything())
 
   return(Capture_data_temp)
 
 }
+
+
 
 #' Create individual table for Bergen, Norway.
 #'
@@ -446,53 +569,18 @@ create_individual_BRG <- function(Capture_data_temp){
   ## Create individual data from capture data
   Individual_data_temp <- Capture_data_temp %>%
 
-    #### Format and create new data columns
-    dplyr::group_by(.data$IndvID, .data$CapturePopID) %>%
-    dplyr::mutate(PopID = .data$CapturePopID) %>%
-    dplyr::group_by(.data$IndvID) %>%
-    dplyr::mutate(RingSeason = min(.data$BreedingSeason, na.rm = T)) %>%
+    ## Format and create new data columns
+    dplyr::mutate(siteID = .data$captureSiteID,
+                  tagYear = dplyr::if_else(is.na(.data$captureTagID), .data$captureYear, NA_integer_),
+                  tagMonth = dplyr::if_else(is.na(.data$captureTagID), .data$captureMonth, NA_integer_),
+                  tagDay = dplyr::if_else(is.na(.data$captureTagID), .data$captureDay, NA_integer_),
+                  tageStage = dplyr::if_else(is.na(.data$captureTagID), .data$Age, NA_character_),
+                  tagSiteID = .data$captureSiteID,
+                  geneticSex = NA_character_) %>%
 
-    ## Arrange
-    dplyr::arrange(.data$IndvID, .data$CaptureDate) %>%
-
-    ## Determine individual info
-    dplyr::mutate(Sex_calculated = purrr::map_chr(.x = list(unique(stats::na.omit(.data$Sex_observed))),
-                                                  .f = ~{
-                                                    if(length(..1) == 0){
-                                                      return(NA_character_)
-                                                    } else if(length(..1) == 1){
-                                                      return(..1)
-                                                    } else {
-                                                      return("C")
-                                                    }
-                                                  }),
-                  Sex_genetic = NA_character_,
-                  Species = purrr::map_chr(.x = list(unique(stats::na.omit(.data$Species))),
-                                           .f = ~{
-                                             if(length(..1) == 0){
-                                               return(NA_character_)
-                                             } else if(length(..1) == 1){
-                                               return(..1)
-                                             } else {
-                                               return("CCCCCC")
-                                             }
-                                           }),
-
-                  RingAge = purrr::pmap_chr(.l = list(dplyr::first(.data$Age_observed)),
-                                            .f = ~{
-                                              if(is.na(..1)){
-                                                return("adult")
-                                              } else if(..1 <= 3L){
-                                                return("chick")
-                                              } else if(..1 > 3L){
-                                                return("adult")
-                                              }
-                                            }))  %>%
-
-
-    ## Add BroodID information
-    dplyr::group_by(.data$IndvID) %>%
-    dplyr::mutate(BroodIDLaid = purrr::map_chr(.x = list(unique(stats::na.omit(.data$BroodID))),
+    ## Add broodID and control speciesID
+    dplyr::group_by(.data$individualID) %>%
+    dplyr::mutate(broodIDLaid = purrr::map_chr(.x = list(unique(stats::na.omit(.data$broodID))),
                                                .f = ~{
                                                  if(length(..1) != 1){
                                                    return(NA_character_)
@@ -500,21 +588,93 @@ create_individual_BRG <- function(Capture_data_temp){
                                                    return(..1)
                                                  }
                                                }),
-                  BroodIDFledged = .data$BroodIDLaid) %>%
+                  broodIDFledged = .data$broodIDLaid,
+                  speciesID = purrr::map_chr(.x = list(unique(stats::na.omit(.data$speciesID))),
+                                             .f = ~{
+                                               if(length(..1) == 0){
+                                                 return(NA_character_)
+                                               } else if(length(..1) == 1){
+                                                 return(..1)
+                                               } else {
+                                                 return("CCCCCC")
+                                               }
+                                             }))  %>%
 
-    ## Keep distinct records by PopID and InvdID
-    dplyr::distinct(.data$PopID, .data$IndvID, .keep_all = TRUE) %>%
+    ## Keep distinct records by siteID and individualID
+    dplyr::distinct(.data$siteID, .data$individualID, .keep_all = TRUE) %>%
 
     ## Arrange
-    dplyr::arrange(.data$CaptureID) %>%
+    dplyr::arrange(.data$captureID) %>%
     dplyr::ungroup() %>%
 
     ## Reorder columns
-    dplyr::select(dplyr::any_of(names(individual_data_template)), tidyselect::everything())
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Individual_data)), tidyselect::everything())
 
   return(Individual_data_temp)
 
 }
+
+
+
+#' Create measurement data table for Bergen, Norway.
+#'
+#' @param Capture_data_temp Data frame of nest data from Bergen, Norway.
+#'
+#' @return A data frame.
+
+create_measurement_BRG <- function(Capture_data_temp) {
+
+  ## Build measuremtent data based on capture data
+  Measurement_data_temp <- Capture_data_temp %>%
+
+    ## Format and create new data table
+    dplyr::mutate(recordID = .data$captureID,
+                  siteID = .data$captureSiteID,
+                  measurementDeterminedYear = .data$captureYear,
+                  measurementDeterminedMonth = .data$captureMonth,
+                  measurementDeterminedDay = .data$captureDay) %>%
+
+    ## Transform measurement columns into rows
+    tidyr::pivot_longer(cols = c("tarsus",
+                                 "wingLength",
+                                 "beak",
+                                 "mass"),
+                        names_to = "measurementType",
+                        values_to = "measurementValue",
+                        values_drop_na = TRUE) %>%
+
+    ## Create new variables
+    dplyr::mutate(measurementSubject = "capture",
+                  measurementAccuracy = NA_real_,
+                  measurementUnit = dplyr::case_when(.data$measurementType == "mass" ~ "g",
+                                                     TRUE ~ "mm"),
+                  measurementMethod = dplyr::case_when(.data$measurementType == "tarsus" ~ "alternative",
+                                                       .data$measurementType == "wingLength" ~ "flattened, maximum chord from ESF guidelines",
+                                                       .data$measurementType == "beak" ~ "beak length from nostril to tip of beak",
+                                                       TRUE ~ NA_character_),
+                  # Convert measurementType to lower case & space-separated
+                  # (e.g., wingLength -> wing length)
+                  measurementType = tolower(gsub("([[:upper:]])", "\\1", .data$measurementType)),
+                  measurementType = stringr::str_replace_all(string = .data$measurementType,
+                                                             pattern = "\\_",
+                                                             replacement = " ")) %>%
+
+    ## Arrange
+    dplyr::arrange(.data$measurementDeterminedYear,
+                   .data$measurementDeterminedMonth,
+                   .data$measurementDeterminedDay) %>%
+
+    ## Create measurementID
+    dplyr::mutate(measurementID = 1:dplyr::n()) %>%
+
+
+    ## Reorder columns
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Measurement_data)), tidyselect::everything())
+
+  return(Measurement_data_temp)
+
+}
+
 
 
 #' Create location data table for Bergen, Norway.
@@ -529,18 +689,50 @@ create_location_BRG <- function(nest_data) {
   Location_data_temp <- nest_data %>%
 
     ## Summarize information for each nest box
-    dplyr::group_by(.data$PopID, .data$LocationID) %>%
-    dplyr::mutate(NestboxID = .data$LocationID,
-                  LocationType = "NB",
-                  StartSeason = min(.data$BreedingSeason, na.rm = TRUE),
-                  EndSeason = NA_integer_,
-                  Latitude = 60.25,
-                  Longitude = 5.26) %>%
+    dplyr::group_by(.data$siteID, .data$locationID) %>%
+    dplyr::mutate(locationType = "NB",
+                  locationDetails = "Schwegler nesting box",
+                  startYear = min(.data$Year, na.rm = TRUE),
+                  endYear = NA_integer_,
+                  decimalLatitude = 60.25,
+                  decimalLongitude = 5.26,
+                  habitatID = dplyr::case_when(.data$HabitatType == "Deciduous" ~ "G1",
+                                               .data$HabitatType == "Evergreen" ~ "G2",
+                                               TRUE ~ "G4")) %>%
 
     ## Keep distinct records
-    dplyr::distinct(.data$PopID, .data$LocationID, .keep_all = TRUE) %>%
-    dplyr::ungroup()
+    dplyr::distinct(.data$siteID, .data$locationID, .keep_all = TRUE) %>%
+    dplyr::ungroup() %>%
 
-  return(Location_data_temp)
+    ## Reorder columns
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Location_data)), tidyselect::everything())
+
+    return(Location_data_temp)
+
+}
+
+
+#' Create experiment data table for Bergen, Norway.
+#'
+#' @param Brood_data_temp Data frame of nest data from Bergen, Norway.
+#'
+#' @return A data frame.
+
+create_experiment_BRG <- function(Brood_data_temp) {
+
+  # No experiment so far - may change in the future years
+  Experiment_data_temp <- Brood_data_temp %>%
+
+    # Drop broods without treatmentID
+    dplyr::filter(!is.na(.data$treatmentID)) %>%
+    dplyr::select("treatmentID",
+                  treatmentStartYear = "observedLayYear",
+                  "studyID",
+                  "siteID") %>%
+
+    ## Reorder columns
+    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Experiment_data)), tidyselect::everything())
+
+  return(Experiment_data_temp)
 
 }
