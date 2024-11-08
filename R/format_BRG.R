@@ -116,7 +116,7 @@ format_BRG <- function(db = choose_directory(),
                      captureMonth = as.integer(.data$Month),
                      captureDay = as.integer(.data$Day),
                      individualID = .data$Ring,
-                     captureTagID = .data$Ring,
+                     captureTagID = NA_character_,
                      Age = tolower(.data$Age),
                      chickAge = as.integer(.data$ChickAge),
                      captureTime = gsub("--", ":00", .data$Time),
@@ -437,7 +437,7 @@ create_brood_BRG <- function(nest_data, chick_data, adult_data) {
                                      locationID,
                                      individualID) %>%
                        dplyr::group_by(.data$Year, .data$plotID, .data$locationID) %>%
-                       dplyr::summarise(nbChicks = n()), ###########NE MARCHE PAS, JE DOIS GARDER LA PREMIERE LIGNE POUR AVOIR BROOD DATA?
+                       dplyr::summarise(nbChicks = n()),
                      by = c("Year", "plotID", "locationID")) %>%
 
     ## Join adult data to get info on parents
@@ -575,7 +575,7 @@ create_individual_BRG <- function(Capture_data_temp){
                   tagYear = dplyr::if_else(is.na(.data$captureTagID), .data$captureYear, NA_integer_),
                   tagMonth = dplyr::if_else(is.na(.data$captureTagID), .data$captureMonth, NA_integer_),
                   tagDay = dplyr::if_else(is.na(.data$captureTagID), .data$captureDay, NA_integer_),
-                  tageStage = dplyr::if_else(is.na(.data$captureTagID), .data$Age, NA_character_),
+                  tagStage = dplyr::if_else(is.na(.data$captureTagID), .data$Age, NA_character_),
                   tagSiteID = .data$captureSiteID,
                   geneticSex = NA_character_) %>%
 
