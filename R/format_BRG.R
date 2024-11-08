@@ -53,8 +53,7 @@ format_BRG <- function(db = choose_directory(),
   }
 
   ## Set options
-  original_options <- options(dplyr.summarise.inform = FALSE)
-  on.exit(options(original_options), add = TRUE, after = FALSE)
+  if(!is.null(optional_variables) & "all" %in% optional_variables) optional_variables <- names(unlist(unname(utility_variables)))
 
 
   ## Read in nest data
@@ -219,7 +218,7 @@ format_BRG <- function(db = choose_directory(),
 
     ## Reorder columns
     dplyr::select(names(data_templates$v2.0$Brood_data)) %>%
-    dplyr::ungroup() %>%
+    dplyr::ungroup()
 
 
   ## Capture data
@@ -285,7 +284,7 @@ format_BRG <- function(db = choose_directory(),
                        tibble::add_row()) %>%
 
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$siteID),
+    dplyr::filter_at(vars(siteID),
                      all_vars(!is.na(.))) %>%
 
     # Add row ID
@@ -308,8 +307,8 @@ format_BRG <- function(db = choose_directory(),
                        tibble::add_row()) %>%
 
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$locationID,
-                          .data$siteID),
+    dplyr::filter_at(vars(locationID,
+                          siteID),
                      all_vars(!is.na(.))) %>%
 
     # Add row ID
@@ -330,7 +329,7 @@ format_BRG <- function(db = choose_directory(),
                        tibble::add_row()) %>%
 
     ## Remove any NAs from critical columns
-    dplyr::filter_at(vars(.data$siteID),
+    dplyr::filter_at(vars(siteID),
                      all_vars(!is.na(.))) %>%
 
     ## Reorder columns
@@ -436,7 +435,9 @@ create_brood_BRG <- function(nest_data, chick_data, adult_data) {
                        dplyr::select(Year,
                                      plotID,
                                      locationID,
-                                     individualID),
+                                     individualID) %>%
+                       dplyr::group_by(.data$Year, .data$plotID, .data$locationID) %>%
+                       dplyr::summarise(nbChicks = n()), ###########NE MARCHE PAS, JE DOIS GARDER LA PREMIERE LIGNE POUR AVOIR BROOD DATA?
                      by = c("Year", "plotID", "locationID")) %>%
 
     ## Join adult data to get info on parents
@@ -696,8 +697,8 @@ create_location_BRG <- function(nest_data) {
                   endYear = NA_integer_,
                   decimalLatitude = 60.25,
                   decimalLongitude = 5.26,
-                  habitatID = dplyr::case_when(.data$HabitatType == "Deciduous" ~ "G1",
-                                               .data$HabitatType == "Evergreen" ~ "G2",
+                  habitatID = dplyr::case_when(.data$HabitatType == "deciduous" ~ "G1",
+                                               .data$HabitatType == "evergreen" ~ "G2",
                                                TRUE ~ "G4")) %>%
 
     ## Keep distinct records
