@@ -1,6 +1,7 @@
 testthat::skip_if(!exists("data_path"))
 
-pipeline_output <- format_BRG(db = paste0(data_path, "/BRG_Bergen_Norway"))
+pipeline_output <- format_BRG(db = paste0(data_path, "/BRG_Bergen_Norway"),
+                              optional_variables = "all")
 
 
 test_that("BRG outputs all files...", {
@@ -47,7 +48,7 @@ test_that("Expected columns are present", {
   ## Experiment data: Test that all columns are present
   test_col_present(pipeline_output, "Experiment")
 
-}) #test failed for Brood, Capture, Individual
+}) #test passed
 
 
 
