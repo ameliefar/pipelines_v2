@@ -8,10 +8,14 @@
 #'
 #'\strong{speciesID}: Primarily Great tits and Blue tits.
 #'
-#'\strong{individualID}: Should be a character s  tring of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
+#'\strong{individualID}: Should be a character string of length 7 where the first two characters are either a letter or number and the last five characters are all numbers.
 #'
-#'\strong{studyID}: one population "BRG-1" at the moment - I'm waiting for data custodian's answer to know
-#'whether Langeskogen should be considered a separate popualation
+#'\strong{studyID}: one population "BRG-1" at the moment -
+#'
+#'\strong{plotID}: two main sites Milde & Langeskogen - the primary data has an upper level of description (variable "Location") but
+#'after discussing with the data custodian, it seems useless, as all nestboxes have a unique number (should avoid special character issue)
+#'
+#'\strong{decimalLatitude}: waiting for file with GPS coordinates for all nestboxes (data custodian confirmed it exists and they'll send it to me)
 #'
 #'@inheritParams pipeline_params
 #'
@@ -21,15 +25,13 @@
 format_BRG <- function(db = choose_directory(),
                        path = ".",
                        species = NULL,
+                       optional_variables = NULL,
                        pop = NULL,
                        output_type = 'R'){
 
   #Force choose_directory() if used
   force(db)
 
-  start_time <- Sys.time()
-
-  message("Importing primary data...")
 
   #### Determine species and population codes for filtering
   if(is.null(species)){
@@ -55,6 +57,9 @@ format_BRG <- function(db = choose_directory(),
   ## Set options
   if(!is.null(optional_variables) & "all" %in% optional_variables) optional_variables <- names(unlist(unname(utility_variables)))
 
+  start_time <- Sys.time()
+
+  message("Importing primary data...")
 
   ## Read in nest data
   nest_data <- readxl::read_xlsx(path = paste0(db, "/BRG_PrimaryData.xlsx"),
@@ -75,8 +80,8 @@ format_BRG <- function(db = choose_directory(),
                                                 .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
                                                 .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
                                                 TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
-                     plotID = .data$Location,
-                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     plotID = .data$Site,
+                     locationID = paste(.data$Site, .data$Nestbox, "NB", sep = "_"),
                      observedLayDate = suppressWarnings(as.Date(as.numeric(.data$LayDate),
                                                                 origin = as.Date(paste0(.data$Year, "-03-31")))),
                      observedHatchDate = suppressWarnings(as.Date(as.numeric(.data$HatchDate),
@@ -109,8 +114,8 @@ format_BRG <- function(db = choose_directory(),
                                                 .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
                                                 .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
                                                 TRUE ~ NA_character_), #remove very specific case (unfamiliar species, mixed-brood instances, or error)
-                     plotID = .data$Location,
-                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     plotID = .data$Site,
+                     locationID = paste(.data$Site, .data$Nestbox, "NB", sep = "_"),
                      captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
                      captureYear = .data$Year,
                      captureMonth = as.integer(.data$Month),
@@ -145,8 +150,8 @@ format_BRG <- function(db = choose_directory(),
                                                 .data$Species == "Svarthvitfluesnapper"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10003)],
                                                 .data$Species == "Svartmeis"  ~ species_codes$speciesID[which(species_codes$speciesCode == 10005)],
                                                 TRUE ~ NA_character_), #anticipate instances of processing adults from other species
-                     plotID = .data$Location,
-                     locationID = paste(.data$Location, .data$Nestbox, "NB", sep = "_"),
+                     plotID = .data$Site,
+                     locationID = paste(.data$Site, .data$Nestbox, "NB", sep = "_"),
                      captureDate = suppressWarnings(as.Date(paste(.data$Year, .data$Month, .data$Day, sep = "-"))), #keep this to sort data
                      captureYear = .data$Year,
                      captureMonth = as.integer(.data$Month),
@@ -163,20 +168,22 @@ format_BRG <- function(db = choose_directory(),
                      capturePhysical = dplyr::if_else(stringr::str_detect(.data$Comment, "ID from color"), FALSE, TRUE),
                      mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
                      wingLength = as.numeric(.data$WingLength),
-                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2),
-                     beak = round(suppressWarnings(as.numeric(.data$Beak)), 2)) #anticipate future column "beak" as discussed with data custodian
+                     tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2))
 
   #### BROOD DATA
   message("Compiling brood information...")
-  Brood_data_temp <- create_brood_BRG(nest_data, chick_data, adult_data)
+  Brood_data_temp <- create_brood_BRG(nest_data, chick_data, adult_data,
+                                      optional_variables = optional_variables)
 
   #### CAPTURE DATA
   message("Compiling capture information...")
-  Capture_data_temp <- create_capture_BRG(chick_data, adult_data, Brood_data_temp)
+  Capture_data_temp <- create_capture_BRG(chick_data, adult_data, Brood_data_temp,
+                                          optional_variables = optional_variables)
 
   #### INDIVIDUAL DATA
   message("Compiling individual information...")
-  Individual_data_temp <- create_individual_BRG(Capture_data_temp)
+  Individual_data_temp <- create_individual_BRG(Capture_data_temp,
+                                                optional_variables = optional_variables)
 
   #### MEASUREMENT DATA
   message("Compiling measurement information...")
@@ -200,13 +207,6 @@ format_BRG <- function(db = choose_directory(),
   ## Brood data
   Brood_data <- Brood_data_temp %>%
 
-    ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(data_templates$v2.0$Brood_data))) %>%
-
-    ## Add missing columns
-    dplyr::bind_cols(data_templates$v2.0$Brood_data[0, !(names(data_templates$v2.0$Brood_data) %in% names(.))] %>%
-                       tibble::add_row()) %>%
-
     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(broodID,
                           siteID,
@@ -216,16 +216,17 @@ format_BRG <- function(db = choose_directory(),
     ## Add rowID
     dplyr::mutate(row = 1:dplyr::n()) %>%
 
-    ## Reorder columns
-    dplyr::select(names(data_templates$v2.0$Brood_data)) %>%
-    dplyr::ungroup()
+    ## Add missing columns
+    dplyr::bind_cols(data_templates$v2.0$Brood_data[0, !(names(data_templates$v2.0$Brood_data) %in% names(.))] %>%
+                       tibble::add_row()) %>%
+
+    ## Keep only necessary columns
+    dplyr::select(names(data_templates$v2.0$Brood_data), dplyr::contains(names(utility_variables$Brood_data),
+                                                                         ignore.case = FALSE))
 
 
   ## Capture data
   Capture_data <- Capture_data_temp %>%
-
-    ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(data_templates$v2.0$Capture_data))) %>%
 
     ## Add missing columns
     dplyr::bind_cols(data_templates$v2.0$Capture_data[0, !(names(data_templates$v2.0$Capture_data) %in% names(.))] %>%
@@ -244,15 +245,12 @@ format_BRG <- function(db = choose_directory(),
     dplyr::mutate(row = 1:dplyr::n()) %>%
 
     ## Reorder columns
-    dplyr::select(names(data_templates$v2.0$Capture_data)) %>%
-    dplyr::ungroup()
+    dplyr::select(names(data_templates$v2.0$Capture_data), dplyr::contains(names(utility_variables$Capture_data),
+                                                                           ignore.case = FALSE))
 
 
   ## Individual data
   Individual_data <- Individual_data_temp %>%
-
-    ## Keep only necessary columns
-    dplyr::select(dplyr::contains(names(data_templates$v2.0$Individual_data))) %>%
 
     ## Add missing columns
     dplyr::bind_cols(data_templates$v2.0$Individual_data[0, !(names(data_templates$v2.0$Individual_data) %in% names(.))] %>%
@@ -268,8 +266,8 @@ format_BRG <- function(db = choose_directory(),
     dplyr::mutate(row = 1:dplyr::n()) %>%
 
     ## Reorder columns
-    dplyr::select(names(data_templates$v2.0$Individual_data))  %>%
-    dplyr::ungroup()
+    dplyr::select(names(data_templates$v2.0$Individual_data), dplyr::contains(names(utility_variables$Individual_data),
+                                                                              ignore.case = FALSE))
 
 
 
@@ -425,7 +423,9 @@ format_BRG <- function(db = choose_directory(),
 #'
 #' @return A data frame.
 
-create_brood_BRG <- function(nest_data, chick_data, adult_data) {
+create_brood_BRG <- function(nest_data, chick_data, adult_data,
+                             species_filter,
+                             optional_variables) {
 
   ## Combine primary data to create brood data
   Brood_data_temp <- nest_data %>%
@@ -505,7 +505,9 @@ create_brood_BRG <- function(nest_data, chick_data, adult_data) {
 #'
 #' @return A data frame.
 
-create_capture_BRG <- function(chick_data, adult_data, Brood_data_temp) {
+create_capture_BRG <- function(chick_data, adult_data, Brood_data_temp,
+                               species_filter,
+                               optional_variables) {
 
 
   ## Combine primary data to create capture data
@@ -565,7 +567,9 @@ create_capture_BRG <- function(chick_data, adult_data, Brood_data_temp) {
 #'
 #' @return A data frame.
 
-create_individual_BRG <- function(Capture_data_temp){
+create_individual_BRG <- function(Capture_data_temp,
+                                  species_filter,
+                                  optional_variables){
 
   ## Create individual data from capture data
   Individual_data_temp <- Capture_data_temp %>%
@@ -608,6 +612,12 @@ create_individual_BRG <- function(Capture_data_temp){
     dplyr::arrange(.data$captureID) %>%
     dplyr::ungroup() %>%
 
+    # Add optional variables
+      {if("calculatedSex" %in% optional_variables) calc_sex(individual_data = .,
+                                                            capture_data = Capture_data_temp)
+        else .} %>%
+
+
     ## Reorder columns
     dplyr::select(dplyr::any_of(names(data_templates$v2.0$Individual_data)), tidyselect::everything())
 
@@ -638,7 +648,6 @@ create_measurement_BRG <- function(Capture_data_temp) {
     ## Transform measurement columns into rows
     tidyr::pivot_longer(cols = c("tarsus",
                                  "wingLength",
-                                 "beak",
                                  "mass"),
                         names_to = "measurementType",
                         values_to = "measurementValue",
@@ -651,7 +660,6 @@ create_measurement_BRG <- function(Capture_data_temp) {
                                                      TRUE ~ "mm"),
                   measurementMethod = dplyr::case_when(.data$measurementType == "tarsus" ~ "alternative",
                                                        .data$measurementType == "wingLength" ~ "flattened, maximum chord from ESF guidelines",
-                                                       .data$measurementType == "beak" ~ "beak length from nostril to tip of beak",
                                                        TRUE ~ NA_character_),
                   # Convert measurementType to lower case & space-separated
                   # (e.g., wingLength -> wing length)
@@ -695,7 +703,7 @@ create_location_BRG <- function(nest_data) {
                   locationDetails = "Schwegler nesting box",
                   startYear = min(.data$Year, na.rm = TRUE),
                   endYear = NA_integer_,
-                  decimalLatitude = 60.25,
+                  decimalLatitude = 60.25, #global coordinates until I get the file with nestbox coordinates
                   decimalLongitude = 5.26,
                   habitatID = dplyr::case_when(.data$HabitatType == "deciduous" ~ "G1",
                                                .data$HabitatType == "evergreen" ~ "G2",
