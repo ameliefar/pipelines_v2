@@ -165,7 +165,8 @@ format_BRG <- function(db = choose_directory(),
                                             .data$ObsAge == "ad" ~ "adult"),
                      captureTime = dplyr::case_when(stringr::str_detect(.data$Time, "--") ~ gsub("--", ":00", .data$Time), #account for cases when only hour was provided
                                                     TRUE ~ paste0(substr(.data$Time,1,2), ":", substr(.data$Time,3,4))),
-                     capturePhysical = dplyr::if_else(stringr::str_detect(.data$Comment, "ID from color"), FALSE, TRUE),
+                     capturePhysical = dplyr::case_when(stringr::str_detect(.data$Comment, "ID from color") ~ FALSE,
+                                                        TRUE ~ TRUE),
                      mass = round(suppressWarnings(as.numeric(.data$Weight)), 1),
                      wingLength = as.numeric(.data$WingLength),
                      tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2))
@@ -528,6 +529,8 @@ create_capture_BRG <- function(chick_data, adult_data, Brood_data_temp,
                   releaseSiteID = .data$siteID, #no instance of transfert/cross-fostering
                   capturePlotID  = .data$plotID,
                   releasePlotID  = .data$plotID,
+                  captureLocationID = .data$locationID,
+                  releaseLocationID = .data$locationID,
                   captureAlive = TRUE,
                   releaseAlive = TRUE) %>%
 
@@ -699,7 +702,7 @@ create_location_BRG <- function(nest_data) {
 
     ## Summarize information for each nest box
     dplyr::group_by(.data$siteID, .data$locationID) %>%
-    dplyr::mutate(locationType = "NB",
+    dplyr::mutate(locationType = "nest",
                   locationDetails = "Schwegler nesting box",
                   startYear = min(.data$Year, na.rm = TRUE),
                   endYear = NA_integer_,
