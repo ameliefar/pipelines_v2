@@ -15,8 +15,6 @@
 #'\strong{plotID}: two main sites Milde & Langeskogen - the primary data has an upper level of description (variable "Location") but
 #'after discussing with the data custodian, it seems useless, as all nestboxes have a unique number (should avoid special character issue)
 #'
-#'\strong{decimalLatitude}: waiting for file with GPS coordinates for all nestboxes (data custodian confirmed it exists and they'll send it to me)
-#'
 #'@inheritParams pipeline_params
 #'
 #'@return Generates either 6 .csv files or 6 data frames in the standard format.
