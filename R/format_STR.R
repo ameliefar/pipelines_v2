@@ -8,8 +8,6 @@
 #'
 #' This section provides details on data management choices that are unique to these data.
 #'
-#' TO GET ADAPTED
-#'
 #' \strong{exactAge, minimumAge}: based on age when tagged. exactAge is calculated for individuals tagged as "PUL". Individuals tagged as "2A" were assigned "subadult"
 #' age (their age is known and refers as "as second year of life") and individuals tagged as "+2A" were assigned "adult". This helps calculting minimumAge. All others
 #' values ("?", "+2?", "2A?") were set to NAs. Check with data custodian that "?" could never be assigned to an individual tagged before fledging.
@@ -36,28 +34,32 @@
 #'
 #' \strong{ExperimentID}: accidental events which may affect breeding attempt are reported and detailed
 #'
+#'
 #' @inheritParams pipeline_params
 #'
 #' @return Generates either 6 .csv files or 6 data frames in the standard format (v2.0.0).
-#'
 #' @export
-#'
+
 format_STR <- function(db = choose_directory(),
+                       path = ".",
                        species = NULL,
                        pop = NULL,
                        optional_variables = NULL,
-                       path = ".",
                        output_type = "R") {
 
   # Force choose_directory() if used
   force(db)
 
-  # Assign species for filtering
+  #### Determine species and population codes for filtering
   if(is.null(species)) {
 
-    species <- species_codes$speciesID
+    species_filter <- NULL
 
+  } else {
+
+    species_filer <- species
   }
+
 
   if(is.null(pop)){
 
