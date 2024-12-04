@@ -171,6 +171,12 @@ format_BRG <- function(db = choose_directory(),
                      wingLength = as.numeric(.data$WingLength),
                      tarsus = round(suppressWarnings(as.numeric(.data$Tarsus)), 2))
 
+  ## Read in location data
+  loc_data <- suppressWarnings(readxl::read_xlsx(path = paste0(db, "/BRG_NestboxLocation.xlsx"),
+                                                   sheet = "Sheet 1",
+                                                   guess_max = 5000,
+                                                   col_types = "text"))
+
   #### BROOD DATA
   message("Compiling brood information...")
   Brood_data_temp <- create_brood_BRG(nest_data, chick_data, adult_data,
@@ -192,7 +198,7 @@ format_BRG <- function(db = choose_directory(),
 
   #### LOCATION DATA
   message("Compiling location information...")
-  Location_data_temp <- create_location_BRG(nest_data)
+  Location_data_temp <- create_location_BRG(nest_data, loc_data)
 
   #### EXPERIMENT DATA
   message("Compiling experiment information...")
@@ -695,22 +701,24 @@ create_measurement_BRG <- function(Capture_data_temp) {
 #'
 #' @return A data frame.
 
-create_location_BRG <- function(nest_data) {
+create_location_BRG <- function(nest_data, loc_data) {
 
   ## Build location data based on nest data
-  Location_data_temp <- nest_data %>%
+  Location_data_temp <- dplyr::left_join(loc_data, nest_data,
+                                         by = c("locationID", "plotID")) %>%
 
     ## Summarize information for each nest box
     dplyr::group_by(.data$siteID, .data$locationID) %>%
     dplyr::mutate(locationType = "nest",
                   locationDetails = "Schwegler nesting box",
-                  startYear = min(.data$Year, na.rm = TRUE),
+                  decimalLatitude = round(as.numeric(decimalLatitude), 4),
+                  decimalLongitude = round(as.numeric(decimalLongitude), 4),
+                  startYear = as.integer(startYear),
                   endYear = NA_integer_,
-                  decimalLatitude = 60.25, #global coordinates until I get the file with nestbox coordinates
-                  decimalLongitude = 5.26,
                   habitatID = dplyr::case_when(.data$HabitatType == "deciduous" ~ "G1",
                                                .data$HabitatType == "evergreen" ~ "G2",
-                                               TRUE ~ "G4")) %>%
+                                               .data$HabitatType == "mixed" ~ "G4",
+                                               TRUE ~ NA_character_)) %>%
 
     ## Keep distinct records
     dplyr::distinct(.data$siteID, .data$locationID, .keep_all = TRUE) %>%
