@@ -5,10 +5,10 @@ inst/doc
 .Ruserdata
 .DS_Store
 debug_report
-
 *.html
 *.rmd
 *.md
 *.pdf
 figure/
 Hackathon*
+pipelines.Rproj
