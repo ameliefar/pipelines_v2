@@ -192,7 +192,7 @@ format_MOU <- function(db = choose_directory(),
                   Tarsus = suppressWarnings(round(as.numeric(.data$Tarsus), 2)),
                   WingLength = suppressWarnings(round(as.numeric(.data$WingChord), 1)),
                   HeadLength = suppressWarnings(round(as.numeric(.data$Head), 1)),
-                  FatScore = suppressWarnings(round(as.numeric(.data$Weight), 0)),
+                  FatScore = suppressWarnings(round(as.numeric(.data$Fat), 0)),
                   TailLength = suppressWarnings(round(as.numeric(.data$Tail), 1)),
                   Mass = suppressWarnings(round(as.numeric(.data$Weight), 1)),) %>%
 
@@ -542,7 +542,7 @@ create_brood_MOU <- function(nest_data, loc_data,
 
 #' Create capture data table for Bergen, Norway.
 #'
-#' @param cap_data, Data frame of individuals (adults and nestlings) ringing records from Moulis, France.
+#' @param capture_data, Data frame of individuals (adults and nestlings) ringing records from Moulis, France.
 #'
 #' @param loc_data, Data frame of nestbox location records from Moulis, France.
 #'
@@ -556,118 +556,102 @@ create_capture_MOU <- function(capture_data, loc_data,
                                optional_variables) {
 
 
-  ## Combine primary data to create first step of capture data
-  Capture_data_merge <- capture_data %>%
-
-    ## Normalise site name
-    dplyr::mutate(plotID = identify_plotID_MOU(.data$captureSite),
+  ## Extract primary data related to individuals that were not captured in the nest
+  capture_adults <- capture_data %>%
+    dplyr::filter(is.na(.data$observedAge) | .data$observedAge != "chick") %>%
+    dplyr::mutate(plot = identify_plotID_MOU(.data$captureSite),
                   Site = stringr::str_replace_all(Site, " ", "_"),
-
-                  ## Identify type of capture
                   captureType = dplyr::case_when(!is.na(.data$nestID) & tolower(.data$nestID) != "filet" ~ "nestbox",
                                                  TRUE ~ "mistnet")) %>%
-
-    ## Remove unidentified species, unidentified sites (or not from the population), and unidentified bird ID
-    dplyr::filter(!is.na(.data$speciesID) & !is.na(.data$plotID) & nchar(.data$individualID) %in% c(7,8)) %>%
-
-    ## Merge data related to location to create corresponding locationID with Brood_data_temp
     dplyr::left_join(loc_data %>%
-                       dplyr::select(Nest, NestRdata, Year, Woodlot),
-                     by = c("nestID" = "Nest", "Year")) %>%
+                       dplyr::select(Nest, NestRdata, Year, Woodlot, Site),
+                     by = c("nestID" = "NestRdata", "Year")) %>%
+    dplyr::mutate(plotID = dplyr::case_when(!is.na(.data$Site.y) ~ .data$Site.y,
+                                            TRUE ~ .data$plot),
+                  locationID = dplyr::case_when(.data$captureType == "nestbox" & is.na(.data$Woodlot) ~ paste(.data$plotID, .data$Nest, "NB", sep = "_"),
+                                                .data$captureType == "nestbox" & !is.na(.data$Woodlot) ~ paste(.data$Woodlot, .data$Nest, "NB", sep = "_"),
+                                                TRUE ~ paste(.data$Site.x, "MN", sep = "_")))
 
-    ## Create additional variables
-    dplyr::mutate(captureYear = as.integer(Year),
-                  captureMonth = as.integer(lubridate::month(.data$captureDate)),
-                  captureDay = as.integer(lubridate::day(.data$captureDate)),
-                  captureSiteID = .data$siteID,
-                  releaseSiteID = .data$siteID,
-                  capturePlotID = .data$plotID,
-                  releasePlotID = .data$plotID,
-                  captureLocationID = dplyr::case_when(.data$captureType == "nestbox" & is.na(.data$Woodlot) ~ paste(.data$plotID, .data$nestID, "NB", sep = "_"),
-                                                       .data$captureType == "nestbox" & !is.na(.data$Woodlot) ~ paste(.data$Woodlot, .data$nestID, "NB", sep = "_"),
-                                                       TRUE ~ paste(.data$Site, "MN", sep = "_")),
-                  releaseLocationID = .data$captureLocationID,
-                  releaseAlive = .data$captureAlive,
-                  chickAge = NA_integer_,
-                  treatmentID = NA_character_,
-                  releaseTagID = .data$individualID) %>%
+    ## Extract primary data related to individuals that were captured in the nest
+    capture_chicks <- capture_data %>%
+      dplyr::filter(.data$observedAge == "chick") %>%
+      dplyr::left_join(loc_data %>%
+                         dplyr::select(Nest, NestRdata, Year, Woodlot, Site),
+                       by = c("nestID" = "NestRdata", "Year")) %>%
+      dplyr::mutate(plotID = .data$Site.y,
+                    locationID = dplyr::case_when(is.na(.data$Woodlot) ~ paste(.data$plotID, .data$Nest, "NB", sep = "_"),
+                                                  TRUE ~ paste(.data$Woodlot, .data$Nest, "NB", sep = "_"))) %>%
+      dplyr::left_join(Brood_data_temp %>%
+                         dplyr::select(Year,
+                                       plotID,
+                                       locationID,
+                                       broodID,
+                                       speciesID,
+                                       observedLayDay,
+                                       observedLayMonth),
+                       by = c("Year", "plotID", "locationID"),
+                       relationship = "many-to-many") %>%
+      dplyr::filter(!is.na(.data$speciesID.y) & !is.na(.data$plotID) & nchar(.data$individualID) %in% c(7,8)) %>%
+      dplyr::mutate(observedLayDate = paste(.data$Year, .data$observedLayMonth, .data$observedLayDay, sep = "-"),
+                    diff = as.Date(.data$captureDate, format = "%Y-%m-%d") - as.Date(.data$observedLayDate, format = "%Y-%m-%d")) %>%
+      dplyr::filter(.data$diff < 50 & .data$diff > 0) %>%
+      dplyr::select(individualID, studyID, siteID, Year, speciesID = "speciesID.y", nestID, Site.x, ct,
+                    captureSite, captureDate, observedSex, age, observedAge, captureTime, recordedBy, capturePhysical,
+                    captureAlive, WingLength, Tarsus, HeadLength, FatScore, Mass, TailLength, Nest, Woodlot, Site.y,
+                    plotID, locationID, broodID)
 
-    ## Sort individual captures to greate captureTagID
-    dplyr::arrange(individualID, captureYear, captureMonth, captureDay, captureTime) %>%
-    dplyr::group_by(individualID) %>%
-    dplyr::mutate(ntime = 1:n()) %>%
-    dplyr::ungroup() %>%
-    dplyr::mutate(captureTagID = dplyr::case_when(ntime == 1 ~ NA_character_,
-                                                  TRUE ~ .data$individualID)) %>%
 
-    ## Set improperly formatted IDs to NA and filter
-    dplyr::mutate(individualID = dplyr::case_when(nchar(.data$individualID) %in% c(7,8) &
-                                                    stringr::str_detect(.data$individualID, "^(V|[0-9])+[:digit:]+$")  ~ .data$individualID,
-                                                  TRUE ~ NA_character_)) %>%
-    dplyr::filter(!is.na(.data$individualID)) %>%
 
-    ## Create captureID
-    ## Arrange
-    dplyr::arrange(.data$Year, .data$individualID, .data$captureDate) %>%
-    dplyr::group_by(.data$individualID) %>%
-    dplyr::mutate(captureID = paste(.data$individualID, 1:dplyr::n(), sep = "_")) %>%
-    dplyr::ungroup()  %>%
 
-    ## Merge with brood data to include broodID (for individual data table)
-    dplyr::left_join(Brood_data_temp %>%
-                       dplyr::select(Year,
-                                     plotID,
-                                     locationID,
-                                     broodID,
-                                     observedLayYear,
-                                     observedLayMonth,
-                                     observedLayDay) %>%
-                       ## Recreate an observed lay date
-                       dplyr::mutate(observedLayDate = paste(.data$observedLayYear, .data$observedLayMonth, .data$observedLayDay, sep = "-")),
-                     by = c("Year", "capturePlotID" = "plotID", "captureLocationID" = "locationID"),
-                     relationship = "many-to-many")
+    Capture_data_temp <- dplyr::bind_rows(capture_adults, capture_chicks) %>%
+      dplyr::mutate(captureYear = as.integer(Year),
+                    captureMonth = as.integer(lubridate::month(.data$captureDate)),
+                    captureDay = as.integer(lubridate::day(.data$captureDate)),
+                    captureSiteID = .data$siteID,
+                    releaseSiteID = .data$siteID,
+                    capturePlotID = .data$plotID,
+                    releasePlotID = .data$plotID,
+                    captureLocationID = .data$locationID,
+                    releaseLocationID = .data$locationID,
+                    releaseAlive = .data$captureAlive,
+                    chickAge = NA_integer_,
+                    treatmentID = NA_character_,
+                    releaseTagID = .data$individualID) %>%
+      dplyr::arrange(individualID, captureYear, captureMonth, captureDay, captureTime) %>%
+      dplyr::group_by(individualID) %>%
+      dplyr::mutate(ntime = 1:n()) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(captureTagID = dplyr::case_when(ntime == 1 ~ NA_character_,
+                                                    TRUE ~ .data$individualID)) %>%
 
-  ## Tackle issues related to duplicated rows (captureID assigned to different broodID)
-  ## The issue happens when there is more than one breeding attempt for the same year at the same nestbox
-  ## Create an object to identify captureID assigned to the wrong broodID
-  pb <- Capture_data_merge %>%
-    dplyr::group_by(.data$captureID) %>%
-    dplyr::summarise(n = n()) %>%
+      ## Set improperly formatted IDs to NA and filter
+      dplyr::mutate(individualID = dplyr::case_when(nchar(.data$individualID) %in% c(7,8) &
+                                                      stringr::str_detect(.data$individualID, "^(V|[0-9])+[:digit:]+$")  ~ .data$individualID,
+                                                    TRUE ~ NA_character_)) %>%
+      dplyr::filter(!is.na(.data$individualID)) %>%
 
-    ## Identify captureID assigned to more than one broodID
-    dplyr::filter(.data$n > 1) %>%
+      ## Create captureID
+      ## Arrange
+      dplyr::arrange(.data$Year, .data$individualID, .data$captureDate) %>%
+      dplyr::group_by(.data$individualID) %>%
+      dplyr::mutate(captureID = paste(.data$individualID, 1:dplyr::n(), sep = "_")) %>%
+      dplyr::ungroup()  %>%
 
-    ## Merge with the first step of capture data
-    dplyr::left_join(Capture_data_merge, by = "captureID") %>%
+      ## Calculate age
+      {if("exactAge" %in% optional_variables | "minimumAge" %in% optional_variables) calc_age(data = .,
+                                                                                              ID = .data$individualID,
+                                                                                              Age = .data$observedAge,
+                                                                                              Date = .data$captureDate,
+                                                                                              Year = .data$Year,
+                                                                                              protocol_version = "2.0")
+        else .}  %>%
 
-    ## Create a variable which count the number of days between capture date and observed lay date
-    dplyr::mutate(diff = as.Date(.data$captureDate, format = "%Y-%m-%d") - as.Date(.data$observedLayDate, format = "%Y-%m-%d")) %>%
+      ## Reorder columns
+      dplyr::select(dplyr::any_of(names(data_templates$v2.0$Capture_data)), tidyselect::everything())
 
-    ## Identify capture event which happened before laying date or too long after laying date
-    dplyr::filter(.data$diff > 50 | .data$diff < 0) %>%
-    dplyr::mutate(pb_id = paste(.data$captureID, .data$broodID, sep = "_"))
-
-  ## create the final step of capture data (by removing duplicated rows)
-  Capture_data_temp <- Capture_data_merge %>%
-    dplyr::mutate(pb_id = paste(.data$captureID, .data$broodID, sep = "_")) %>%
-    filter(!(.data$pb_id %in% pb$pb_id)) %>%
-
-    ## Calculate age
-    {if("exactAge" %in% optional_variables | "minimumAge" %in% optional_variables) calc_age(data = .,
-                                                                                            ID = .data$individualID,
-                                                                                            Age = .data$observedAge,
-                                                                                            Date = .data$captureDate,
-                                                                                            Year = .data$Year,
-                                                                                            protocol_version = "2.0")
-      else .}  %>%
-
-    ## Reorder columns
-    dplyr::select(dplyr::any_of(names(data_templates$v2.0$Capture_data)), tidyselect::everything())
-
-  return(Capture_data_temp)
+    return(Capture_data_temp)
 
 }
-
 
 
 #' Create individual table for Moulis, France.
@@ -774,7 +758,7 @@ create_measurement_MOU <- function(Capture_data_temp) {
                   measurementMethod = dplyr::case_when(.data$measurementType == "Tarsus" ~ "tarsus-length, from ESF guideline, but higher than the notch of the metatarsus (values slightly higher than usual)",
                                                        .data$measurementType == "WingLength" ~ "flattened, maximum chord from ESF guidelines",
                                                        .data$measurementType == "HeadLength" ~ "distance from the back of the skull and the tip of the bill",
-                                                       .data$measurementType == "FatScore" ~ "fat score from 0 to 3, from ESF guidelines",
+                                                       .data$measurementType == "FatScore" ~ "from ESF guidelines, from 0 to 3",
                                                        TRUE ~ NA_character_),
                   # Convert measurementType to lower case & space-separated
                   # (e.g., wingLength -> wing length)
@@ -815,9 +799,9 @@ create_location_MOU <- function(loc_data,
   ## Create table with information related to mistnet captures
   loc_mn <- Capture_data_temp %>%
     dplyr::filter(captureType == "mistnet") %>%
-    dplyr::arrange(.data$Site, .data$Year) %>%
-    dplyr::group_by(.data$Site) %>%
-    dplyr::mutate(locationID = paste(.data$Site, "MN", sep = "_"),
+    dplyr::arrange(.data$Site.x, .data$Year) %>%
+    dplyr::group_by(.data$Site.x) %>%
+    dplyr::mutate(locationID = paste(.data$Site.x, "MN", sep = "_"),
                   studyID = "MOU-1",
                   siteID = "MOU",
                   startYear = first(.data$Year),
