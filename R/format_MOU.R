@@ -106,14 +106,14 @@ format_MOU <- function(db = choose_directory(),
                   observedNumberFledged = suppressWarnings(as.integer(.data$FledgeNb)),
 
               #After discussing with data custodian, merge the twho colums related to Nest number
-                  nestID = dplyr::case_when(!is.na(.data$NestRdata) ~ toupper(.data$NestRdata),
-                                            TRUE ~ toupper(.data$Nest)),
+                  nestID = dplyr::case_when(!is.na(.data$Nest) ~ toupper(.data$Nest),
+                                            TRUE ~ toupper(.data$NestRdata)),
                   femaleID = .data$FBand,
                   maleID = .data$MBand,
                   treatmentID = dplyr::case_when(!is.na(.data$CrossFosterDate) ~ "cross-fostering",
                                                  !is.na(.data$PredatorPresentationDate) ~ "predation_exp",
                                                  TRUE ~ NA_character_)) %>%
-    dplyr::select(nestID, speciesID, studyID, siteID, Year, NestAttempt, observedLayDate, observedClutchSize, observedHatchDate, observedBroodSize,
+    dplyr::select(NestRdata, Nest, nestID, speciesID, studyID, siteID, Year, NestAttempt, observedLayDate, observedClutchSize, observedHatchDate, observedBroodSize,
                   observedFledgeDate, observedNumberFledged, ChickBandDate, FBandDate, femaleID, MBandDate, maleID, treatmentID)
 
 
@@ -487,20 +487,20 @@ create_brood_MOU <- function(nest_data, loc_data,
     ## Join location data to normalise information about plot_ID and location_ID
     dplyr::left_join(loc_data %>%
                        dplyr::select(Nest, NestRdata, Year, Site, Woodlot),
-                     by = c("nestID" = "NestRdata", "Year"),
+                     by = c("nestID" = "Nest", "Year"),
                      relationship = "many-to-one") %>%
 
     ## Create variables related to location
     dplyr::mutate(plotID = .data$Site,
-                  locationID = dplyr::case_when(is.na(.data$Woodlot) ~ paste(.data$plotID, .data$Nest, "NB", sep = "_"),
-                                                TRUE ~ paste(.data$Woodlot, .data$Nest, "NB", sep = "_"))) %>%
+                  locationID = dplyr::case_when(is.na(.data$Woodlot) ~ paste(.data$plotID, .data$nestID, "NB", sep = "_"),
+                                                TRUE ~ paste(.data$Woodlot, .data$nestID, "NB", sep = "_")))  %>%
 
 
     dplyr::arrange(.data$siteID, .data$Year, .data$plotID, .data$locationID) %>%
 
     ## Create additional variables
     dplyr::mutate(broodID = paste(.data$Year, 1:dplyr::n(), sep = "-"),
-                  observedLayYear = as.integer(lubridate::year(.data$observedLayDate)),
+                  observedLayYear = as.integer(.data$Year),
                   observedLayMonth = as.integer(lubridate::month(.data$observedLayDate)),
                   observedLayDay = as.integer(lubridate::day(.data$observedLayDate)),
                   observedHatchYear = as.integer(.data$Year),
@@ -573,7 +573,7 @@ create_capture_MOU <- function(capture_data, loc_data,
     ## Merge data related to location to create corresponding locationID with Brood_data_temp
     dplyr::left_join(loc_data %>%
                        dplyr::select(Nest, NestRdata, Year, Woodlot),
-                     by = c("nestID" = "NestRdata", "Year")) %>%
+                     by = c("nestID" = "Nest", "Year")) %>%
 
     ## Create additional variables
     dplyr::mutate(captureYear = as.integer(Year),
@@ -583,8 +583,8 @@ create_capture_MOU <- function(capture_data, loc_data,
                   releaseSiteID = .data$siteID,
                   capturePlotID = .data$plotID,
                   releasePlotID = .data$plotID,
-                  captureLocationID = dplyr::case_when(.data$captureType == "nestbox" & is.na(.data$Woodlot) ~ paste(.data$plotID, .data$Nest, "NB", sep = "_"),
-                                                       .data$captureType == "nestbox" & !is.na(.data$Woodlot) ~ paste(.data$Woodlot, .data$Nest, "NB", sep = "_"),
+                  captureLocationID = dplyr::case_when(.data$captureType == "nestbox" & is.na(.data$Woodlot) ~ paste(.data$plotID, .data$nestID, "NB", sep = "_"),
+                                                       .data$captureType == "nestbox" & !is.na(.data$Woodlot) ~ paste(.data$Woodlot, .data$nestID, "NB", sep = "_"),
                                                        TRUE ~ paste(.data$Site, "MN", sep = "_")),
                   releaseLocationID = .data$captureLocationID,
                   releaseAlive = .data$captureAlive,
@@ -824,7 +824,7 @@ create_location_MOU <- function(loc_data,
                   endYear = last(.data$Year),
                   locationType = "capture",
                   locationDetails = "mistnet") %>%
-    dplyr::distinct(.data$Nest, .keep_all = TRUE) %>%
+    dplyr::distinct(.data$locationID, .keep_all = TRUE) %>%
     dplyr::mutate(endYear = dplyr::case_when(.data$endYear == 2023 ~ NA_integer_,
                                              TRUE ~ .data$endYear)) %>%
     dplyr::select(locationID, locationType, locationDetails, studyID, siteID, startYear, endYear)
