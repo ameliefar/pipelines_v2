@@ -152,11 +152,11 @@ format_MOU <- function(db = choose_directory(),
                   sex = tolower(.data$Sex),
 
                   #Normalize values related to sex
-                  observedSex = dplyr::case_when(stringr::str_detect(.data$sex, fixed("?")) ~ "U",
-                                                 stringr::str_detect(.data$sex, "undetermined") ~ "U",
+                  observedSex = dplyr::case_when(stringr::str_detect(.data$sex, fixed("?")) ~ NA_character_,
+                                                 stringr::str_detect(.data$sex, "undetermined") ~ NA_character_,
                                                  stringr::str_detect(.data$sex, "m|male") ~ "M",
                                                  stringr::str_detect(.data$sex, "f|female") ~ "F",
-                                                 TRUE ~ "U"),
+                                                 TRUE ~ NA_character_),
 
                   #Normalize values related to age
                   age = tolower(stringr::str_trim(.data$Age)),
@@ -380,6 +380,9 @@ format_MOU <- function(db = choose_directory(),
     ## Remove any NAs from critical columns
     dplyr::filter_at(vars(siteID),
                      all_vars(!is.na(.))) %>%
+
+    # Add row ID
+    dplyr::mutate(row = 1:dplyr::n()) %>%
 
     ## Reorder columns
     dplyr::select(names(data_templates$v2.0$Experiment_data))  %>%
@@ -617,6 +620,7 @@ create_capture_MOU <- function(capture_data, loc_data,
                     chickAge = NA_integer_,
                     treatmentID = NA_character_,
                     releaseTagID = .data$individualID) %>%
+      dplyr::filter(!is.na(.data$plotID)) %>%
       dplyr::arrange(individualID, captureYear, captureMonth, captureDay, captureTime) %>%
       dplyr::group_by(individualID) %>%
       dplyr::mutate(ntime = 1:n()) %>%
@@ -809,6 +813,7 @@ create_location_MOU <- function(loc_data,
                   locationType = "capture",
                   locationDetails = "mistnet") %>%
     dplyr::distinct(.data$locationID, .keep_all = TRUE) %>%
+    dplyr::ungroup() %>%
     dplyr::mutate(endYear = dplyr::case_when(.data$endYear == 2023 ~ NA_integer_,
                                              TRUE ~ .data$endYear)) %>%
     dplyr::select(locationID, locationType, locationDetails, studyID, siteID, startYear, endYear)
@@ -831,6 +836,7 @@ create_location_MOU <- function(loc_data,
                   elevation = round(as.numeric(Elevation), 4),
                   habitatID = NA_character_) %>%
     dplyr::distinct(.data$Nest, .keep_all = TRUE) %>%
+    dplyr::ungroup() %>%
     dplyr::mutate(endYear = dplyr::case_when(.data$endYear == 2023 ~ NA_integer_,
                                              TRUE ~ .data$endYear)) %>%
     ## Add table with mistnet information
@@ -856,14 +862,17 @@ create_experiment_MOU <- function(Brood_data_temp) {
 
     # Drop broods without treatmentID
     dplyr::filter(!is.na(.data$treatmentID)) %>%
-    dplyr::select("treatmentID",
+    dplyr::select(treatID = "treatmentID",
                   treatmentStartYear = "observedLayYear",
                   "studyID",
                   "siteID") %>%
-    dplyr::mutate(experimentID = .data$treatmentID,
+    dplyr::mutate(treatmentID = paste(.data$treatID, .data$treatmentStartYear, sep = "_"),
+                  experimentID = .data$treatID,
                   experimentType = dplyr::case_when(.data$treatmentID == "cross-fostering" ~ "transfert",
                                                     TRUE ~ "behavioural experiment"),
-                  treatmentDetails = "Contact data custodian for details") %>%
+                  treatmentDetails = "Contact data custodian for details",
+                  treatmentEndYear = .data$treatmentStartYear) %>%
+    dplyr::distinct(.data$treatmentID, .keep_all = TRUE) %>%
 
     ## Reorder columns
     dplyr::select(dplyr::any_of(names(data_templates$v2.0$Experiment_data)), tidyselect::everything())
@@ -892,7 +901,7 @@ identify_plotID_MOU <- function(variable){
   dplyr::case_when(variable %in% c("Lab", "L1", "Moulis Lab", "L1_moulis", "Labo") ~ "Labo",
                    variable %in% c("Mou2", "Mou3", "Mou1", "M1", "Mou5", "M2", "Moulis") ~ "Moulis",
                    variable %in% c("Afr Garden", "Galeyafr", "Galey", "Andy", "G1", "Gj") ~ "Galey",
-                   variable %in% c("H1", "Castera Bas", "Castera", "Arrech", "Arrech Notrh", "H4",
+                   variable %in% c("H1", "Castera Bas", "Castera", "Arrech", "Arrech North", "H4",
                                    "H6", "H7", "H5") ~ "Castera",
                    variable %in% c("Ces1", "Ces3", "Ces4", "Ces2", "Asc Garden", "Cescau Haut",
                                    "Cescau 1", "Cescau", "Cesc 4", "C1", "C4", "C5", "C", "C3", "C2",
