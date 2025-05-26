@@ -543,7 +543,7 @@ create_brood_MOU <- function(nest_data, loc_data,
 }
 
 
-#' Create capture data table for Bergen, Norway.
+#' Create capture data table for Moulis, France.
 #'
 #' @param capture_data, Data frame of individuals (adults and nestlings) ringing records from Moulis, France.
 #'
