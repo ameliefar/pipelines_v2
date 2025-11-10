@@ -6,7 +6,7 @@
 #'this data. For a general description of the standard format please see
 #'\href{https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v2.0.pdf}{here}.
 #'
-#'\strong{Species}: Only PARMAJ and CYACAE are entered in the Capture and Individual tables.
+#'\strong{speciesID}: Only PARMAJ and CYACAE are entered in the Capture and Individual tables.
 #'
 #'\strong{IndvID}: IndvID codes of the form '19XX' (two numbers + XX) indicate a chick that died before fledging.
 #' The first two numbers give the year in which the chick died. There is one adult band that also includes 'XX' so this should not
