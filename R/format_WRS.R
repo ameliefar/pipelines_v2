@@ -16,6 +16,8 @@
 #'
 #'\strong{treatmentID}: there are no reported experiments, so there is no experiment table
 #'
+#'\strong{endYear}: the data administrator indicated ending the long-term monitoring program in 2025 so endYear is set to "2025"
+#'
 #'@inheritParams pipeline_params
 #'
 #'@return Generates either 5 .csv files or 5 data frames in the standard format. (no experiment table)
@@ -146,7 +148,7 @@ format_WRS <- function(db = choose_directory(),
                   Mass = suppressWarnings(as.numeric(.data$WeightD15)),
                   chickAge = dplyr::case_when(!is.na(.data$WeightD15) ~ 15L,
                                               TRUE ~ NA_integer_),
-                  observedSex = "U",
+                  observedSex = NA_character_,
                   captureAlive = TRUE,
                   releaseAlive = TRUE,
                   observedAge = "chick")
@@ -538,8 +540,8 @@ create_capture_WRS <- function(chick_data, adult_data) {
                   captureLocationID = .data$locationID,
                   releaseLocationID = .data$locationID,
                   captureYear = .data$Year,
-                  captureMonth = lubridate::month(.data$captureDate),
-                  captureDay = lubridate::day(.data$captureDate),
+                  captureMonth = suppressWarnings(as.integer(lubridate::month(.data$captureDate))),
+                  captureDay = suppressWarnings(as.integer(lubridate::day(.data$captureDate))),
                   capturePhysical = TRUE,
                   releaseTagID = individualID) %>%
     ## Set improperly formatted IDs to NA
@@ -743,7 +745,7 @@ create_location_WRS <- function(nest_data) {
     dplyr::reframe(locationType = "nest",
                    locationDetails = paste("Nestbox", .data$NestType, sep = "_"),
                    startYear = min(.data$Year, na.rm = TRUE),
-                   endYear = NA_integer_,
+                   endYear = suppressWarnings(as.integer(2025)),
 
                    ## Keep lat/lon with the most digits for each box
                    decimalLatitude = as.numeric(.data$Latitude[which.max(nchar(.data$Latitude))]),
@@ -753,7 +755,7 @@ create_location_WRS <- function(nest_data) {
                    ## PAL described as  "surburban village" (I used "J2" = "Low density buildings" from EUNIS)
                    ## KPN = forest (national park) (I used "G3" = "Coniferous woodland" from EUNIS and description of the park )
                    ## others classified as "J1" = "Buildings of cities, towns and villages"  from EUNIS habitat classification
-                   habitatID = dplyr::case_when(.data$Site == "WRS_KPN" ~ "G3",
+                   habitatID = dplyr::case_when(.data$Site == "KPN" ~ "G3",
                                                 .data$Site == "PAL" ~ "J2",
                                                 TRUE ~ "J1")) %>%
 
