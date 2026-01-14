@@ -1,14 +1,5 @@
-inst/doc
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
-.DS_Store
-debug_report
-
-*.html
-*.rmd
-*.md
-*.pdf
-figure/
-Hackathon*
+"sysdata.rda" 
