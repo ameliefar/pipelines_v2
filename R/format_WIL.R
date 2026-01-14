@@ -1,6 +1,3 @@
-
-# THIS IS THE ORIGINAL
-
 # Construct standard format for data from Wilrijk, Belgium
 # using SPI-Birds https://github.com/SPI-Birds/documentation/blob/master/standard_protocol/SPI_Birds_Protocol_v2.0.0.pdf
 
