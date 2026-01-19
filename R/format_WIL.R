@@ -90,15 +90,15 @@ format_WIL <- function(db = choose_directory(),
     return(df)
   }
 
-  Individual_data <- add_template(Individual_data, data_templates$v2.0.0$Individual_data,
+  Individual_data <- add_template(Individual_data, data_templates$v2.0$Individual_data,
                                   utility_variables$Individual_data, optional_variables)
-  Brood_data      <- add_template(Brood_data, data_templates$v2.0.0$Brood_data,
+  Brood_data      <- add_template(Brood_data, data_templates$v2.0$Brood_data,
                                   utility_variables$Brood_data, optional_variables)
-  Capture_data    <- add_template(Capture_data, data_templates$v2.0.0$Capture_data,
+  Capture_data    <- add_template(Capture_data, data_templates$v2.0$Capture_data,
                                   utility_variables$Capture_data, optional_variables)
-  Location_data   <- add_template(Location_data, data_templates$v2.0.0$Location_data)
-  Measurement_data<- add_template(Measurement_data, data_templates$v2.0.0$Measurement_data)
-  Experiment_data <- add_template(Experiment_data, data_templates$v2.0.0$Experiment_data)
+  Location_data   <- add_template(Location_data, data_templates$v2.0$Location_data)
+  Measurement_data<- add_template(Measurement_data, data_templates$v2.0$Measurement_data)
+  Experiment_data <- add_template(Experiment_data, data_templates$v2.0$Experiment_data)
 
   # --- OUTPUT ---
   time <- difftime(Sys.time(), start_time, units = "sec")
@@ -143,7 +143,7 @@ create_brood_WIL <- function(db, species = c("CYACAE", "PARMAJ"), optional_varia
       dplyr::mutate(
         # Create unique broodID
         broodID = paste0("WIL", sprintf("%06d", as.numeric(BroodID))),
-        plotID = as.character(Plot),
+        plotID = toupper(as.character(Plot)),
         locationID = as.character(NestboxID),
         observedClutchSize = as.integer(suppressWarnings(as.numeric(ClutchSize))),
         observedNumberFledged = as.integer(suppressWarnings(as.numeric(NumberFledglings))),
@@ -207,78 +207,13 @@ create_brood_WIL <- function(db, species = c("CYACAE", "PARMAJ"), optional_varia
         broodID
       }
     ) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    # Add row number as first column
+    dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
+    dplyr::select(row, dplyr::everything())
 
   message(paste0("✅ Brood data formatted successfully: ", nrow(brood_std_sp_df), " rows, ", ncol(brood_std_sp_df), " columns."))
   return(brood_std_sp_df)
-}
-
-create_bird_temp <- function(db, species = c("CYACAE","PARMAJ")) {
-
-  species_list <- if (is.null(species)) c("CYACAE", "PARMAJ") else species
-
-  bird_temp_list <- lapply(species_list, function(sp) {
-
-    file_name <- switch(sp,
-                        "CYACAE" = "20240927_vg_pimpel_CDE.xlsx",
-                        "PARMAJ" = "20240927_vg_kool_CDE_2024.xlsx")
-
-    message(paste0("Reading raw capture file for ", sp, " (", file_name, ")..."))
-
-    bird_temp <- readxl::read_excel(file.path(db, file_name), col_types = "text") %>%
-      dplyr::mutate(
-        # Standardize individualID to uppercase alphanumeric, padded to 10 chars
-        individualID = toupper(stringr::str_pad(as.character(KBIN), width = 10, side = "right", pad = "0")),
-        broodID = paste0("WIL", sprintf("%06d", as.numeric(NN))),
-        Species = soort,
-        captureDate = suppressWarnings(lubridate::as_date(as.numeric(datum), origin = "1899-12-30")),
-        capturePlotID = as.character(plot),
-        captureLocationID = as.character(plaats),
-        CaptureType = as.character(methode),
-        ObserverID = as.character(wie),
-        Mass = suppressWarnings(as.numeric(gewicht)),
-        WingLength = suppressWarnings(as.numeric(vleugel)),
-        Tarsus = suppressWarnings(as.numeric(tarr1)),
-        Comments = as.character(opmerkingen),
-        DNAveren = ifelse("DNAveren" %in% names(.), suppressWarnings(as.numeric(DNAveren)), 0),
-        DNAbl = suppressWarnings(as.numeric(DNAbl)),
-        DNA = if_else(DNAbl == 1 | DNAveren == 1, 1, 0, missing = 0),
-        sex_num = suppressWarnings(as.numeric(sex)),
-        observedSex = case_when(
-          sex_num == 1 ~ "M",
-          sex_num == 2 ~ "F",
-          sex_num == 3 ~ "U",
-          TRUE ~ NA_character_
-        ),
-        age_num = suppressWarnings(as.numeric(age)),
-        Age = ifelse(age_num < 1, "chick", "adult")
-      ) %>%
-      dplyr::select(individualID, Species, observedSex, broodID, capturePlotID, captureLocationID, captureDate, CaptureType,
-                    Age, Mass, WingLength, Tarsus, DNA, ObserverID, Comments) %>%
-      dplyr::filter(!is.na(individualID)) %>%
-      distinct()
-
-    return(bird_temp)
-  })
-
-  # Combine species into one dataframe
-  bird_temp_df <- dplyr::bind_rows(bird_temp_list)
-
-  # Match broodIDs with those in brood data (ensure consistency)
-  bird_temp_df <- bird_temp_df %>%
-    dplyr::group_by(broodID) %>%
-    dplyr::mutate(
-      broodID = if(dplyr::n() > 1 & dplyr::n_distinct(broodID) == 1) {
-        paste0(broodID, "_", dplyr::row_number())
-      } else {
-        broodID
-      }
-    ) %>%
-    dplyr::ungroup()
-
-  message(paste0("✅ Raw capture data loaded: ", nrow(bird_temp_df), " rows, ", ncol(bird_temp_df), " columns."))
-
-  return(bird_temp_df)
 }
 
 # --- INDIVIDUAL DATA ---
@@ -308,7 +243,7 @@ create_individual_WIL <- function(bird_temp_df, species = NULL, optional_variabl
       tagMonth = as.integer(lubridate::month(dplyr::first(captureDate))),
       tagDay = as.integer(lubridate::day(dplyr::first(captureDate))),
       tagStage = ifelse(dplyr::first(Age) == "chick", "chick", "adult"),
-      tagSiteID = dplyr::first(capturePlotID),
+      tagSiteID = siteID,
       geneticSex = dplyr::case_when(
         any(DNA == 1, na.rm = TRUE) & any(observedSex == "M", na.rm = TRUE) & any(observedSex == "F", na.rm = TRUE) ~ "C",
         any(DNA == 1, na.rm = TRUE) & any(observedSex == "M", na.rm = TRUE) & !any(observedSex == "F", na.rm = TRUE) ~ "M",
@@ -322,6 +257,11 @@ create_individual_WIL <- function(bird_temp_df, species = NULL, optional_variabl
   if (!is.null(optional_variables) && "calculatedSex" %in% optional_variables) {
     ind_temp <- calc_sex(ind_temp, bird_temp_df)
   }
+
+  # Add row number as first column
+  ind_temp <- ind_temp %>%
+    dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
+    dplyr::select(row, dplyr::everything())
 
   message(paste0("✅ Individual data formatted: ", nrow(ind_temp), " rows, ", ncol(ind_temp), " columns."))
   return(ind_temp)
@@ -340,9 +280,8 @@ create_capture_WIL <- function(bird_temp_df, optional_variables = NULL) {
     dplyr::group_by(individualID) %>%
     dplyr::mutate(
       speciesID = dplyr::case_when(
-        dplyr::n_distinct(Species) > 1 ~ "CCCCCC",
-        dplyr::first(Species) == "Cyanistes caeruleus" ~ "CYACAE",
-        dplyr::first(Species) == "Parus major" ~ "PARMAJ",
+        Species == "Parus major" ~ species_codes$speciesID[species_codes$speciesCode == 10001],
+        Species == "Cyanistes caeruleus" ~ species_codes$speciesID[species_codes$speciesCode == 10002],
         TRUE ~ NA_character_
       )
     ) %>%
@@ -377,6 +316,7 @@ create_capture_WIL <- function(bird_temp_df, optional_variables = NULL) {
       chickAge = NA_integer_,
       treatmentID = NA_character_
     ) %>%
+    dplyr::filter(!is.na(captureYear)) %>%
     # Anonymise observers
     dplyr::group_by(recordedBy) %>%
     dplyr::mutate(recordedBy = paste0("obs_", dplyr::cur_group_id())) %>%
@@ -388,6 +328,11 @@ create_capture_WIL <- function(bird_temp_df, optional_variables = NULL) {
                          Age = cap_temp$Age,
                          protocol_version = "2.0")
   }
+
+  # Add row number as first column
+  cap_temp <- cap_temp %>%
+    dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
+    dplyr::select(row, dplyr::everything())
 
   message(paste0("✅ Capture data formatted: ", nrow(cap_temp), " rows, ", ncol(cap_temp), " columns."))
   return(cap_temp)
@@ -423,7 +368,10 @@ create_measurement_WIL <- function(bird_temp_df) {
     # Anonymise observers
     dplyr::group_by(recordedBy) %>%
     dplyr::mutate(recordedBy = paste0("obs_", dplyr::cur_group_id())) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    # Add row number as first column
+    dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
+    dplyr::select(row, dplyr::everything())
 
   message(paste0("✅ Measurement data formatted: ", nrow(meas_temp), " rows, ", ncol(meas_temp), " columns."))
   return(meas_temp)
@@ -456,7 +404,10 @@ create_location_WIL <- function(db) {
       habitatID = NA_character_,
       decimalLatitude = as.numeric(decimalLatitude),
       decimalLongitude = as.numeric(decimalLongitude)
-    )
+    ) %>%
+    # Add row number as first column
+    dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
+    dplyr::select(row, dplyr::everything())
 
   message(paste0("✅ Location data formatted successfully: ", nrow(loc_temp), " rows, ", ncol(loc_temp), " columns."))
   return(loc_temp)
@@ -468,7 +419,8 @@ create_experiment_WIL <- function() {
   message("Formatting experiment data...")
 
   # Create empty experiment data with correct structure
-  exp_std <- data_templates$v2.0.0$Experiment_data[0, ]
+  exp_std <- data_templates$v2.0$Experiment_data %>%
+    dplyr::filter(FALSE)
 
   message(paste0("✅ Experiment data formatted: ", nrow(exp_std), " rows (no experiments)."))
 
@@ -495,9 +447,9 @@ habitat_codes <- read.csv("inst/extdata/habitat_codes.csv")
 
 # Util functions
 # run code in: https://github.com/SPI-Birds/pipelines/blob/master/data-raw/internal_data.R
-# run code in: https://github.com/SPI-Birds/pipelines/blob/master/R/calc_clutchtype.R
+# run code in: https://github.com/SPI-Birds/pipelines/blob/master/R/calc_clutchtype.R -> not run it!
 # run code in: https://github.com/ameliefar/pipelines_v2/blob/WRS/R/utility_functions.R
-
+# test_general_format
 
 
 # RUN TESTS
@@ -542,25 +494,29 @@ test_that("Pipeline output matches SPI-Birds standard format", {
 
 # Check errors
 
-errors <- test_col_present(pipeline_output, "Brood", verbose=TRUE)
-errors <- test_col_present(pipeline_output, "Capture", verbose=TRUE)
-errors <- test_col_present(pipeline_output, "Individual", verbose=TRUE)
+errors <- test_col_present(pipeline_output, "Brood", verbose=TRUE) # NO ERRORS!
+errors <- test_col_present(pipeline_output, "Capture", verbose=TRUE) # NO ERRORS!
+errors <- test_col_present(pipeline_output, "Individual", verbose=TRUE) # NO ERRORS!
 
 errors <- test_col_classes(pipeline_output, "Capture", verbose=TRUE) # NO ERRORS!
 errors <- test_col_classes(pipeline_output, "Brood", verbose=TRUE) # NO ERRORS!
 
-errors <- test_unique_values(pipeline_output, "broodID", verbose=TRUE) # "20010044" "20220059" NA
-errors <- test_unique_values(pipeline_output, "captureID", verbose=TRUE) # character(0)
-errors <- test_NA_columns(pipeline_output, "Brood", verbose=TRUE) # NA in many columns
-errors <- test_NA_columns(pipeline_output, "Capture", verbose=TRUE) # NA in many columns
-errors <- test_category_columns(pipeline_output, "Brood", verbose=TRUE) # speciesID
-errors <- test_category_columns(pipeline_output, "Capture", verbose=TRUE) # speciesID
+errors <- test_unique_values(pipeline_output, "broodID", verbose=TRUE) # NO ERRORS!
+errors <- test_unique_values(pipeline_output, "captureID", verbose=TRUE) # NO ERRORS!
+errors <- test_NA_columns(pipeline_output, "Brood", verbose=TRUE) # NO ERRORS!
+errors <- test_NA_columns(pipeline_output, "Capture", verbose=TRUE) # NO ERRORS!
+errors <- test_category_columns(pipeline_output, "Brood", verbose=TRUE) # NO ERRORS!
+errors <- test_category_columns(pipeline_output, "Capture", verbose=TRUE) # NO ERRORS!
+errors <- test_category_columns(pipeline_output, "Individual", verbose=TRUE) # NO ERRORS!
 
 
 
-# EXPORT AND CHECK DATA
 
-# PRIMARY DATA
+
+
+# CHECK DATA
+
+# Primary data
 
 # brood data
 br_pimpel_CDE <- read_excel(paste0(db_path,"20240927_br_pimpel_CDE.xlsx"))
@@ -574,7 +530,7 @@ vg_kool_CDE <- read_excel(paste0(db_path,"20240927_vg_kool_CDE_2024.xlsx"))
 location_CDE <- read_excel(paste0(db_path, "gps coordinates Beco.xlsx"))
 
 
-# STANDARD DATA
+# Standard data
 
 # brood data
 test_brood_CYACAE <- create_brood_WIL(db = db_path,
