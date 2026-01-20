@@ -137,7 +137,12 @@ create_brood_WIL <- function(db, species = c("CYACAE", "PARMAJ"), optional_varia
 
     brood_temp <- brood_primary %>%
       dplyr::mutate(
-        broodID = paste0("WIL", sprintf("%06d", as.numeric(BroodID))),
+        broodID = BroodID,
+        broodID = stringr::str_trim(broodID),
+        broodID = dplyr::na_if(broodID, ""),
+        broodID = dplyr::na_if(broodID, "NA"),
+        broodID = dplyr::if_else(grepl("^NA_[0-9]+$", broodID), NA_character_, broodID),
+        broodID = dplyr::if_else(!is.na(broodID) & grepl("^[0-9]+$", broodID), paste0("WIL", broodID), NA_character_),
         speciesID = dplyr::case_when(
           Species == "Parus major" ~ species_codes$speciesID[species_codes$speciesCode == 10001],
           Species == "Cyanistes caeruleus" ~ species_codes$speciesID[species_codes$speciesCode == 10002],
@@ -184,9 +189,15 @@ create_brood_WIL <- function(db, species = c("CYACAE", "PARMAJ"), optional_varia
   brood_std_sp_df <- dplyr::bind_rows(brood_std_sp)
 
   brood_std_sp_df <- brood_std_sp_df %>%
-    dplyr::group_by(broodID) %>%
-    dplyr::mutate(broodID = if (dplyr::n() > 1) paste0(broodID, "_", dplyr::row_number()) else broodID) %>%
-    dplyr::ungroup() %>%
+    dplyr::mutate(
+      broodID = stringr::str_trim(broodID),
+      broodID = dplyr::na_if(broodID, ""),
+      broodID = dplyr::na_if(broodID, "NA"),
+      broodID = dplyr::if_else(grepl("^NA_[0-9]+$", broodID), NA_character_, broodID),
+      broodID = dplyr::if_else(grepl("^[0-9]+$", broodID), paste0("WIL", broodID), broodID)
+    ) %>%
+    dplyr::filter(!is.na(broodID)) %>%
+    dplyr::mutate(broodID = make.unique(broodID, sep = "_")) %>%
     dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
     dplyr::select(row, dplyr::everything())
 
@@ -222,7 +233,12 @@ create_bird_temp <- function(db, species = c("CYACAE", "PARMAJ")) {
     bird_temp <- bird_temp %>%
       dplyr::mutate(
         individualID = toupper(stringr::str_pad(as.character(individualID), width = 10, side = "right", pad = "0")),
-        broodID = paste0("WIL", sprintf("%06d", suppressWarnings(as.numeric(broodID)))),
+        broodID = stringr::str_trim(broodID),
+        broodID = dplyr::na_if(broodID, ""),
+        broodID = dplyr::na_if(broodID, "NA"),
+        broodID = dplyr::if_else(grepl("^NA_[0-9]+$", broodID), NA_character_, broodID),
+        broodID = dplyr::if_else(!is.na(broodID) & grepl("^[0-9]+$", broodID),
+                                 paste0("WIL", broodID), NA_character_),
         DNAbl = if ("DNAbl" %in% names(.)) suppressWarnings(as.numeric(DNAbl)) else 0,
         DNAveren = if ("DNAveren" %in% names(.)) suppressWarnings(as.numeric(DNAveren)) else 0,
         DNA = dplyr::if_else(DNAbl == 1 | DNAveren == 1, 1, 0),
@@ -401,10 +417,11 @@ create_measurement_WIL <- function(bird_temp_df) {
   message("Formatting measurement data...")
 
   meas_temp <- bird_temp_df %>%
+    # Filter out records with NA captureDate
+    dplyr::filter(!is.na(captureDate)) %>%
     dplyr::arrange(individualID, captureDate) %>%
     dplyr::mutate(
       recordID = dplyr::row_number(),
-      measurementID = paste0("WIL_M", sprintf("%08d", dplyr::row_number())),
       studyID = "WIL-1",
       siteID = "WIL",
       measurementSubject = "capture",
@@ -412,17 +429,32 @@ create_measurement_WIL <- function(bird_temp_df) {
       measurementDeterminedMonth = as.integer(lubridate::month(captureDate)),
       measurementDeterminedDay = as.integer(lubridate::day(captureDate)),
       measurementDeterminedTime = NA_character_,
-      recordedBy = ObserverID,
+      # Handle NA values in ObserverID before grouping
+      recordedBy = ifelse(is.na(ObserverID) | ObserverID == "", "UNKNOWN", ObserverID),
       measurementMethod = NA_character_
     ) %>%
-    tidyr::pivot_longer(cols = c(Mass, WingLength, Tarsus), names_to = "measurementType", values_to = "measurementValue") %>%
+    tidyr::pivot_longer(cols = c(Mass, WingLength, Tarsus),
+                        names_to = "measurementType",
+                        values_to = "measurementValue") %>%
     dplyr::filter(!is.na(measurementValue)) %>%
-    dplyr::mutate(measurementAccuracy = NA_real_) %>%
+    # Add measurementUnit based on measurementType
+    dplyr::mutate(
+      measurementUnit = dplyr::case_when(
+        measurementType == "Mass" ~ "g",
+        measurementType == "WingLength" ~ "mm",
+        measurementType == "Tarsus" ~ "mm",
+        TRUE ~ NA_character_
+      ),
+      measurementAccuracy = NA_real_
+    ) %>%
+    # Generate unique measurementID
+    dplyr::mutate(measurementID = paste0("WIL_M", sprintf("%08d", dplyr::row_number()))) %>%
     dplyr::group_by(recordedBy) %>%
     dplyr::mutate(recordedBy = paste0("obs_", dplyr::cur_group_id())) %>%
     dplyr::ungroup() %>%
-    dplyr::select(measurementID, recordID, studyID, siteID, measurementSubject, measurementType, measurementValue,
-                  measurementAccuracy, measurementDeterminedYear, measurementDeterminedMonth, measurementDeterminedDay,
+    dplyr::select(measurementID, recordID, studyID, siteID, measurementSubject, measurementType,
+                  measurementValue, measurementAccuracy, measurementUnit,
+                  measurementDeterminedYear, measurementDeterminedMonth, measurementDeterminedDay,
                   measurementDeterminedTime, recordedBy, measurementMethod) %>%
     dplyr::mutate(row = as.integer(dplyr::row_number())) %>%
     dplyr::select(row, dplyr::everything())
@@ -477,7 +509,7 @@ create_experiment_WIL <- function() {
 
 
 
-# ONLY FOR TESTING #################################################################################
+# ---------------------------------------- ONLY FOR TESTING ----------------------------------------
 
 
 db_path <- "C:/Users/aina/OneDrive - Universiteit Antwerpen/Postdoc/FAIRBiRDS/SPI-Birds/WP1/WIL/"
@@ -499,20 +531,29 @@ habitat_codes <- read.csv("inst/extdata/habitat_codes.csv")
 library(testthat)
 library(pipelines)
 
+# General tests
+
 test_that("Pipeline output matches SPI-Birds standard format", {
 
   # Get pipeline output
-  pipeline_output <- format_WIL(db=db_path)
+  pipeline_output <- format_WIL(db=db_path,
+                                optional_variables = c("breedingSeason", "calculatedClutchType",
+                                                       "nestAttemptNumber", "calculatedSex",
+                                                       "exactAge", "minimumAge"))
 
   # Test column presence for all tables
   test_col_present(pipeline_output, "Brood")
   test_col_present(pipeline_output, "Capture")
   test_col_present(pipeline_output, "Individual")
+  test_col_present(pipeline_output, "Measurement")
+  test_col_present(pipeline_output, "Location")
 
   # Test column classes
   test_col_classes(pipeline_output, "Brood")
   test_col_classes(pipeline_output, "Capture")
   test_col_classes(pipeline_output, "Individual")
+  test_col_present(pipeline_output, "Measurement")
+  test_col_classes(pipeline_output, "Location")
 
   # Test ID formats
   test_ID_format(pipeline_output, "femaleID", "^[A-Z0-9]{6,10}$")
@@ -521,16 +562,24 @@ test_that("Pipeline output matches SPI-Birds standard format", {
   # Test for uniqueness
   test_unique_values(pipeline_output, "broodID")
   test_unique_values(pipeline_output, "captureID")
+  test_unique_values(pipeline_output, "individualID")
+  test_unique_values(pipeline_output, "measurementID")
+  test_unique_values(pipeline_output, "locationID")
+  test_unique_values(pipeline_output, "treatmentID")
 
   # Test for NAs in key columns
   test_NA_columns(pipeline_output, "Brood")
   test_NA_columns(pipeline_output, "Capture")
   test_NA_columns(pipeline_output, "Individual")
+  test_NA_columns(pipeline_output, "Measurement")
+  test_NA_columns(pipeline_output, "Location")
 
   # Test categorical values
   test_category_columns(pipeline_output, "Brood")
   test_category_columns(pipeline_output, "Capture")
   test_category_columns(pipeline_output, "Individual")
+  test_category_columns(pipeline_output, "Measurement")
+  test_category_columns(pipeline_output, "Location")
 
 })
 
@@ -569,7 +618,6 @@ test_brood <- create_brood_WIL(db = db_path,
                                optional_variables = c("breedingSeason", "calculatedClutchType",
                                                       "nestAttemptNumber"))
 
-
 # (temporal) bird data
 test_bird_CYACAE <- create_bird_temp(db = db_path, species = "CYACAE")
 test_bird_PARMAJ <- create_bird_temp(db = db_path, species = "PARMAJ")
@@ -605,5 +653,5 @@ format_WIL(
   species = NULL,                # "PARMAJ", "CYACAE", or NULL for both
   optional_variables = c("breedingSeason", "calculatedClutchType", "nestAttemptNumber", "calculatedSex",
                          "exactAge", "minimumAge"),
-  output_type = "csv")            # CSV export
+  output_type = "csv")           # CSV export
 
