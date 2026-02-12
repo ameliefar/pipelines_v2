@@ -10,7 +10,7 @@
 #'
 #'@inheritParams pipeline_params
 #'
-#'@return Generates either 4 .csv files or 4 data frames in the standard format.
+#'@return Generates either 5 .csv files or 5 data frames in the standard format.
 #'@export
 
 format_CAC <- function(db = choose_directory(),
@@ -70,9 +70,9 @@ cac_data <- readxl::read_xlsx(path = paste0(db, "/CAC_PrimaryData.xlsx"), guess 
                 observedNumberFledged = as.integer(.data$NumberFledglings),
 
                 ## TODO: Check on cross fostering
-                trtID = dplyr::case_when(stringr::str_detect(.data$Crossfostering, "ous") & stringr::str_detect(.data$Crossfostering, "poll") ~ "trt_3",
-                                                stringr::str_detect(.data$Crossfostering, "ous") ~ "trt_1",
-                                                stringr::str_detect(.data$Crossfostering, "poll") ~ "trt_2",
+                trtID = dplyr::case_when(stringr::str_detect(stringr::str_to_lower(.data$Crossfostering), "ous") & stringr::str_detect(stringr::str_to_lower(.data$Crossfostering), "poll") ~ "trt_3",
+                                                stringr::str_detect(stringr::str_to_lower(.data$Crossfostering), "ous") ~ "trt_1",
+                                                stringr::str_detect(stringr::str_to_lower(.data$Crossfostering), "poll") ~ "trt_2",
                                                 is.na(.data$Crossfostering) ~ NA_character_,
                                                 TRUE ~ "trt_U"),
 
@@ -440,15 +440,15 @@ create_capture_CAC <- function(cac_data,
                                                                                                                          .data$AgeM == "Y" ~ "subadult"))),
 
                   ## TODO: Check if there are no chick banding
-                  chickAge = NA_character_,
+                  chickAge = NA_integer_,
                   ## TODO: Change capture date approximation by true date from data custodian
                   approximateDate = dplyr::case_when(!is.na(.data$observedHatchDate) ~ .data$observedHatchDate + 10,
                                                      TRUE ~ .data$observedLayDate + 25), #attempt to approximate captureDate before getting the right answer
 
                   ## Create new columns
                   captureYear = .data$Year,
-                  captureMonth = lubridate::month(.data$approximateDate),
-                  captureDay = lubridate::day(.data$approximateDate),
+                  captureMonth = suppressWarnings(as.integer(lubridate::month(.data$approximateDate))),
+                  captureDay = suppressWarnings(as.integer(lubridate::day(.data$approximateDate))),
                   releaseTagID = .data$individualID,
                   captureSiteID = .data$siteID,
                   releaseSiteID = .data$siteID,
@@ -457,7 +457,9 @@ create_capture_CAC <- function(cac_data,
                   captureLocationID = .data$locationID,
                   releaseLocationID = .data$locationID,
                   captureAlive = TRUE,
-                  releaseAlive = TRUE) %>%
+                  releaseAlive = TRUE,
+                  # TODO: ensure all adults were captured
+                  capturePhysical = TRUE) %>%
 
     ## Create captureID
     ## Arrange
@@ -565,7 +567,8 @@ create_location_CAC <- function(cac_data) {
 
     ## Get additional information
     dplyr::group_by(.data$studyID, .data$locationID) %>%
-    dplyr::mutate(startYear = min(.data$Year, na.rm = TRUE),
+    dplyr::mutate(locationID = as.character(.data$locationID),
+                  startYear = min(.data$Year, na.rm = TRUE),
                   endYear = NA_integer_,
                   locationType = "nest",
                   locationDetails = "nesting box", #check nestbox type (I think it is wooden nesting box)
